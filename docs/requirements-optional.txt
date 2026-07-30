@@ -1,0 +1,48 @@
+# ============================================================
+# 数学建模生产系统 — 可选依赖（按需安装）
+# 每个包标注用途和对应脚本，不装不影响主流水线
+# 用法: pip install -r docs/requirements-optional.txt  （全装）
+#    或 pip install <单个包名>                          （按需）
+# ============================================================
+
+# --- v4.3 工具链（单点提效）---
+
+# 期刊风图表（IEEE/Nature/Science 76 样式）
+# 脚本: .claude/skills/math-figure/scripts/journal_style.py
+SciencePlots
+
+# PDF 表格提取（赛题附表一键转 CSV）
+# 脚本: .claude/skills/data-cleaning-and-visualization/scripts/extract_pdf_tables.py
+camelot-py[cv]
+
+# 模型可解释性（ML 题特征重要性，评委加分项）
+# 脚本: .claude/skills/feature-engineering/scripts/shap_explain.py
+shap
+
+# 超参调优（TPE 贝叶斯优化，替代网格搜索）
+# 脚本: .claude/skills/model-code-and-result-generator/scripts/optuna_tune.py
+optuna
+
+# 宏观/金融/行业数据获取（C 题刚需，GDP/CPI/股价等）
+# 脚本: .claude/skills/authoritative-data-harvester/scripts/akshare_fetch.py
+akshare
+
+# --- v4.3 公式 OCR（赛前建议预装，临场装很慢）---
+# 脚本: .claude/skills/problem-doc-model-selector/scripts/extract_formulas_ocr.py
+# 安装后首跑会下载模型，需设环境变量: HF_ENDPOINT=https://hf-mirror.com
+# pix2text
+
+# --- v4.2 RAG 优秀论文检索（语料需自备）---
+# 脚本: .claude/skills/award-paper-rag/scripts/
+# 见 .claude/skills/award-paper-rag/scripts/requirements.txt
+# llama-index-core>=0.10
+# llama-index-embeddings-huggingface
+# sentence-transformers
+
+# --- v4.3 群体智能算法库（启发式优化一行调用）---
+# 文档: .claude/skills/model-code-and-result-generator/references/heuristic-algo-scikit-opt.md
+# scikit-opt
+
+# --- Nature 学术检索 MCP server（如启用该 MCP）---
+# 见 nature-skills/skills/nature-academic-search/mcp-server/requirements.txt
+# pip install -r nature-skills/skills/nature-academic-search/mcp-server/requirements.txt

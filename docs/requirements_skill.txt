@@ -1,10 +1,23 @@
+# ============================================================
+# 数学建模生产系统 — 核心依赖（必装）
+# 用法: pip install -r docs/requirements_skill.txt
+# 或一键安装: ./setup.ps1 (Windows) / ./setup.sh (macOS/Linux)
+# ============================================================
+
+# --- 数据处理 ---
 pandas
 numpy
-matplotlib
-seaborn
-requests
-python-docx
-pypdf
 openpyxl
 xlrd
-lxml
+
+# --- 可视化 ---
+matplotlib
+seaborn
+
+# --- 文档处理 ---
+python-docx          # Word 读写（paper-formal-writer 排版链）
+pypdf                # PDF 读取
+lxml                 # XML 解析（docx-editor-cn）
+
+# --- 网络 ---
+requests             # 论文检索 / 在线验证
