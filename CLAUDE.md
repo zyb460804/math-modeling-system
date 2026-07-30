@@ -65,7 +65,7 @@
 → Word 排版 → 格式门禁 → 最终 QA →（championship）盲评 Panel + figqa 碰撞门
 ```
 
-### 10 个 Native Skill 及路由（轨道 A 核心）
+### 10 个 Native Skill 及路由（主轨道核心）
 
 | Skill | 职责 | 触发时机 |
 |-------|------|----------|
@@ -80,7 +80,7 @@
 | `paper-micro-unit-generator` | 微单元生成、局部扩写 | 需要分块写作/低能力兜底 |
 | `context-memory-keeper` | 三层记忆架构（工作/短期/长期）+ 知识图谱集成 | 各阶段完成后 |
 
-### 9 个 Legacy Skill（轨道 B 手动工作流）
+### 9 个 Legacy Skill（内部调度工具，原轨道 B，v3.4 统一入口已取代）
 
 | Skill | 职责 | 口令 |
 |-------|------|------|
@@ -508,8 +508,8 @@ e:\数学建模\
 │   └── blind-panel-judge.md     ★ 盲评单座（v4.1，3 座并行之一）
 │
 ├── .claude/skills/        ← ★ Claude Code Skill 包（67 个，v4.2 +3）
-│   ├── [轨道 A] 10 个核心流水线 skill（见上方 Native Skill 表）
-│   ├── [轨道 B] 9 个 Legacy 手动 skill（scan/card/rules/analyze/review/code/defense/submit/figure）
+│   ├── [核心] 10 个流水线 skill（见上方 Native Skill 表，主轨道）
+│   ├── [Legacy] 9 个手动 skill（scan/card/rules/analyze/review/code/defense/submit/figure，口令已统一入口取代）
 │   ├── [新增] 10 个智能辅助 skill（model-selector/chart-recommender/defense-simulator/algorithm-runner/result-validator/paper-rewriter/diagram-maker/interactive-chart/math-figure/network-graph）
 │   ├── [Nature] 9 个学术写作 skill（nature-polishing/writing/figure/citation/data/reader/response/paper2ppt/academic-search）
 │   ├── [社区] 13 个社区 skill（zhnnky329 + Lupynow + academic-skills + Gabberflast + lishix520）
@@ -642,9 +642,12 @@ e:\数学建模\
 
 ---
 
-## 核心工作流（双轨制）
+## 核心工作流（单系统 · Skill 流水线）
 
-### 轨道 A：Skill 自动化流水线（正式赛题推荐）
+> **v4.4 起：双系统已收敛为单生产系统**（math-model-producer 归档至 `resources/_archive/`）。
+> **v3.4 起：触发词统一入口已取代旧"轨道 B"手动口令**——9 个 Legacy Skill 降级为内部调度工具，`prompts/` 降级为参考文档，不再是独立对等轨道。当前系统是**单轨道：Skill 流水线**。
+
+### Skill 流水线（主轨道）
 
 ```
 预检(problem_files非空) → 题意解析 → 模型路线 → 数据/图表计划
@@ -652,7 +655,9 @@ e:\数学建模\
 → Agent全局写作 → Word排版 → 格式门禁 → 最终QA →（championship）盲评Panel + figqa碰撞门
 ```
 
-### 轨道 B：Prompt 手动工作流（灵活/局部任务）
+### Prompt 工作流（Legacy 参考）
+
+> `prompts/00-30` 的 31 个提示词文件仍保留为**参考文档**，用于灵活/局部任务和离线参考，但不再是与 Skill 并列的独立工作流。所有核心能力（审题/选模/代码/图表/评审/答辩/提交）均已由 Skill 统一入口覆盖（见下方口令映射）。
 
 ```
 任务路由 → 知识更新/资料入库 → 单题开工 → 数据理解 → 审题选模 →
@@ -680,7 +685,7 @@ e:\数学建模\
 
 ## 口令映射
 
-### 轨道 B 手动口令（v3.4 统一入口）
+### Legacy 口令（v3.4 统一入口已取代原轨道 B）
 
 | 口令 | 路由 | 默认输出 |
 |------|------|---------|
