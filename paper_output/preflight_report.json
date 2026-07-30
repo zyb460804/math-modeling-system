@@ -1,0 +1,210 @@
+{
+  "schema_version": "1.0",
+  "generated_by": "paper-workflow-orchestrator/scripts/preflight_check.py",
+  "generated_at": "2026-07-25T20:55:10",
+  "status": "PASS",
+  "root": "E:/数学建模",
+  "problem_files": {
+    "exists": true,
+    "non_empty": true,
+    "file_count": 10,
+    "doc_candidates": [
+      {
+        "path": "E:/数学建模/problem_files/A题/A题.pdf",
+        "ext": ".pdf",
+        "extractable": true,
+        "char_count": 2662,
+        "pages_sampled": 3,
+        "warnings": [],
+        "errors": [],
+        "total_pages": 3
+      },
+      {
+        "path": "E:/数学建模/problem_files/README.md",
+        "ext": ".md",
+        "extractable": true,
+        "char_count": 347,
+        "warnings": [],
+        "errors": [],
+        "encoding": "utf-8-sig"
+      }
+    ],
+    "data_candidates": [
+      {
+        "path": "E:/数学建模/problem_files/A题/附件1：园区典型日常规电负荷标幺功率曲线.xlsx",
+        "ext": ".xlsx",
+        "readable": true,
+        "sheets": [
+          {
+            "name": "Sheet1",
+            "rows": 25,
+            "cols": 2,
+            "sample_cols": [
+              "时段",
+              "典型日常规电负荷标幺功率"
+            ]
+          }
+        ],
+        "warnings": [],
+        "errors": []
+      },
+      {
+        "path": "E:/数学建模/problem_files/A题/附件2：典型日风电、光伏标幺功率表.xlsx",
+        "ext": ".xlsx",
+        "readable": true,
+        "sheets": [
+          {
+            "name": "Sheet1",
+            "rows": 25,
+            "cols": 3,
+            "sample_cols": [
+              "时段",
+              "风电标幺值",
+              "光伏标幺值"
+            ]
+          }
+        ],
+        "warnings": [],
+        "errors": []
+      },
+      {
+        "path": "E:/数学建模/problem_files/A题/附件3：园区6种场景的风电标幺功率表.xlsx",
+        "ext": ".xlsx",
+        "readable": true,
+        "sheets": [
+          {
+            "name": "Sheet1",
+            "rows": 25,
+            "cols": 7,
+            "sample_cols": [
+              "时段",
+              "风电场景1",
+              "风电场景2",
+              "风电场景3",
+              "风电场景4",
+              "风电场景5",
+              "风电场景6"
+            ]
+          }
+        ],
+        "warnings": [],
+        "errors": []
+      },
+      {
+        "path": "E:/数学建模/problem_files/A题/附件4：园区4种场景的光伏标幺功率表.xlsx",
+        "ext": ".xlsx",
+        "readable": true,
+        "sheets": [
+          {
+            "name": "Sheet1",
+            "rows": 25,
+            "cols": 5,
+            "sample_cols": [
+              "时段",
+              "光伏场景1",
+              "光伏场景2",
+              "光伏场景3",
+              "光伏场景4"
+            ]
+          }
+        ],
+        "warnings": [],
+        "errors": []
+      },
+      {
+        "path": "E:/数学建模/problem_files/A题/附件5：风光发电与制氢设备技术参数.xlsx",
+        "ext": ".xlsx",
+        "readable": true,
+        "sheets": [
+          {
+            "name": "Sheet1",
+            "rows": 6,
+            "cols": 5,
+            "sample_cols": [
+              "",
+              "风机",
+              "光伏",
+              "碱性电解槽",
+              "质子交换膜电解槽"
+            ]
+          }
+        ],
+        "warnings": [],
+        "errors": []
+      },
+      {
+        "path": "E:/数学建模/problem_files/A题/附件6：储能设备和合成氨装置技术参数.xlsx",
+        "ext": ".xlsx",
+        "readable": true,
+        "sheets": [
+          {
+            "name": "Sheet1",
+            "rows": 7,
+            "cols": 3,
+            "sample_cols": [
+              "",
+              "电储能",
+              "合成氨装置"
+            ]
+          }
+        ],
+        "warnings": [],
+        "errors": []
+      },
+      {
+        "path": "E:/数学建模/problem_files/A题/附件7：分时电价表.xlsx",
+        "ext": ".xlsx",
+        "readable": true,
+        "sheets": [
+          {
+            "name": "Sheet1",
+            "rows": 4,
+            "cols": 2,
+            "sample_cols": [
+              "时段",
+              "分时电价（元/kWh）"
+            ]
+          }
+        ],
+        "warnings": [],
+        "errors": []
+      },
+      {
+        "path": "E:/数学建模/problem_files/A题/附件8：风电、光伏余电上网电价.xlsx",
+        "ext": ".xlsx",
+        "readable": true,
+        "sheets": [
+          {
+            "name": "Sheet1",
+            "rows": 3,
+            "cols": 3,
+            "sample_cols": [
+              "电源类型",
+              "上网电价（元/kWh）",
+              "说明"
+            ]
+          }
+        ],
+        "warnings": [],
+        "errors": []
+      }
+    ],
+    "suspicious_template_files": []
+  },
+  "deps": {
+    "required": [
+      "openpyxl",
+      "pypdf"
+    ],
+    "missing": [],
+    "present": [
+      "openpyxl",
+      "pypdf"
+    ]
+  },
+  "stale_output": {
+    "final_paper_docx_exists": false
+  },
+  "errors": [],
+  "warnings": []
+}

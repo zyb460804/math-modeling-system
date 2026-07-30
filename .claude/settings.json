@@ -1,0 +1,403 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pip install *)",
+      "Bash(pip list *)",
+      "Bash(pip show *)",
+      "Bash(dir *)",
+      "Bash(ls *)",
+      "Bash(type *)",
+      "Bash(cat *)",
+      "Bash(tree *)",
+      "Bash(mkdir *)",
+      "Bash(cd *)",
+      "Bash(copy *)",
+      "Bash(move *)",
+      "Bash(echo *)",
+      "Bash(black *)",
+      "Bash(git *)",
+      "Bash(Get-Date *)",
+      "Bash(New-Item *)",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(del /s *)",
+      "Bash(del /f *)",
+      "Bash(rmdir /s *)",
+      "Bash(rd /s *)",
+      "Bash(format *)",
+      "Bash(shutdown *)",
+      "Bash(reg *)",
+      "Bash(taskkill *)",
+      "Bash(net user *)",
+      "Bash(net localgroup *)",
+      "Bash(powershell -enc *)",
+      "Bash(certutil *)",
+      "Bash(bitsadmin *)",
+      "Bash(del *.docx)",
+      "Bash(del *.pdf)",
+      "Bash(del *docx*)",
+      "Bash(del *pdf*)",
+      "Bash(rm *.docx)",
+      "Bash(rm *.pdf)",
+      "Bash(copy * C:\\Windows\\*)",
+      "Bash(move * C:\\Windows\\*)",
+      "Bash(rm resources/*)",
+      "Bash(del resources\\*)",
+      "Bash(rm -r resources/*)",
+      "Bash(rm .claude/*)",
+      "Bash(del .claude\\*)",
+      "Write:problem_files/**",
+      "Edit:problem_files/**",
+      "Bash(del problem_files\\*)",
+      "Bash(rm problem_files/*)",
+      "Bash(rm -r problem_files/*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python e:/数学建模/.claude/hooks/protect_outputs.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python e:/数学建模/.claude/hooks/precommit_secret_guard.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python e:/数学建模/.claude/hooks/check_python.py"
+          },
+          {
+            "type": "command",
+            "command": "python e:/数学建模/.claude/hooks/format_python.py"
+          },
+          {
+            "type": "command",
+            "command": "python e:/数学建模/.claude/hooks/auto_evidence_gate.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python e:/数学建模/.claude/hooks/log_exit_code.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python e:/数学建模/.claude/hooks/check_index_sync.py"
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "claude-code-setup@claude-plugins-official": true
+  },
+  "skills": {
+    "scan": {
+      "name": "扫描资料",
+      "description": "扫描目录、建文件地图、标优先级"
+    },
+    "card": {
+      "name": "抽卡",
+      "description": "逐文件提炼知识卡片，更新知识库"
+    },
+    "rules": {
+      "name": "建规则库",
+      "description": "更新评分表、方法匹配表、模板库"
+    },
+    "analyze": {
+      "name": "审题",
+      "description": "判断题型、提炼目标、推荐建模路线"
+    },
+    "review": {
+      "name": "审论文",
+      "description": "全文评分、问题拆解、修改优先级清单"
+    },
+    "code": {
+      "name": "生成代码",
+      "description": "判断题型与算法，生成可运行代码框架"
+    },
+    "figure": {
+      "name": "生成图示",
+      "description": "判断最需要的图，输出图示方案"
+    },
+    "defense": {
+      "name": "准备答辩",
+      "description": "答辩提纲、高频问答、追问链、风险点",
+      "disable-model-invocation": true
+    },
+    "submit": {
+      "name": "提交包",
+      "description": "高分自检后输出论文+代码+图表+答辩清单",
+      "disable-model-invocation": true
+    },
+    "nature-polishing": {
+      "name": "Nature学术润色",
+      "description": "Nature风格英文润色、学术翻译、改写摘要"
+    },
+    "nature-writing": {
+      "name": "Nature学术写作",
+      "description": "Nature风格论文写作、重建引言/讨论/结论"
+    },
+    "nature-figure": {
+      "name": "Nature科学图表",
+      "description": "Nature/高影响力期刊多面板科学图表"
+    },
+    "nature-citation": {
+      "name": "Nature文献引用",
+      "description": "Nature/CNS期刊文献检索与引用插入"
+    },
+    "nature-data": {
+      "name": "数据可用性声明",
+      "description": "Nature数据可用性声明、FAIR检查、数据仓库选型"
+    },
+    "nature-reader": {
+      "name": "论文双语阅读器",
+      "description": "论文中英对照全文翻译、图表提取"
+    },
+    "nature-response": {
+      "name": "审稿回复信",
+      "description": "Nature风格逐条审稿回复信撰写与修订"
+    },
+    "nature-paper2ppt": {
+      "name": "论文转PPT",
+      "description": "论文转中文PPT、组会/期刊俱乐部汇报"
+    },
+    "nature-academic-search": {
+      "name": "多源学术搜索",
+      "description": "PubMed/CrossRef/arXiv多源文献检索与格式转换"
+    },
+    "git-snapshot": {
+      "name": "项目快照",
+      "description": "创建项目时间点快照，保留最近10个版本",
+      "disable-model-invocation": true
+    },
+    "algorithm-test": {
+      "name": "代码测试",
+      "description": "运行Python代码、语法检查、错误捕获、产出报告"
+    },
+    "paper-workflow-orchestrator": {
+      "name": "论文流水线总控",
+      "description": "★ 总入口，阶段判断与路由，预检→S1-S8全流程编排"
+    },
+    "problem-doc-model-selector": {
+      "name": "题意解析",
+      "description": "赛题文档解析、题型判断、目标提炼"
+    },
+    "modeling-paper-rubric-and-model-selector": {
+      "name": "模型路线与评分",
+      "description": "模型路线规划、评分闭环、方法选型"
+    },
+    "authoritative-data-harvester": {
+      "name": "权威数据获取",
+      "description": "外部权威数据/文献采集与补充"
+    },
+    "data-cleaning-and-visualization": {
+      "name": "数据清洗与可视化",
+      "description": "数据处理、图表计划与生成"
+    },
+    "model-code-and-result-generator": {
+      "name": "建模代码与结果",
+      "description": "建模代码生成、结果证据契约输出"
+    },
+    "quality-assurance-auditor": {
+      "name": "质量门禁审计",
+      "description": "证据门禁检查、QA任务清单、最终把关"
+    },
+    "paper-formal-writer": {
+      "name": "正式论文成稿",
+      "description": "正式成稿、大纲契约、Word排版、格式门禁"
+    },
+    "paper-micro-unit-generator": {
+      "name": "微单元生成",
+      "description": "分块写作、局部扩写、低能力兜底"
+    },
+    "context-memory-keeper": {
+      "name": "上下文记忆",
+      "description": "上下文记忆断点保存、跨阶段状态恢复"
+    },
+    "latex-renderer": {
+      "name": "LaTeX公式渲染",
+      "description": "LaTeX公式转PNG图片嵌入Word，生成公式编号清单"
+    },
+    "word-counter": {
+      "name": "论文字数统计",
+      "description": "实时追踪中英文字数、图表数、公式数，对标国赛18000字要求"
+    },
+    "matlab-code-reviewer": {
+      "name": "Matlab代码审查",
+      "description": "审查、调试、验证Matlab建模代码，对照方法计划和预期产物"
+    },
+    "python-code-reviewer": {
+      "name": "Python代码审查",
+      "description": "审查、调试、验证Python建模代码，对照方法计划和预期产物"
+    },
+    "matlab-model-code-generator": {
+      "name": "Matlab代码生成",
+      "description": "从已验证的方法计划和清洗数据生成可执行Matlab建模代码"
+    },
+    "solution-package-builder": {
+      "name": "解决方案包构建",
+      "description": "整合建模解释和编程结果分析，生成论文写作所需的完整解决方案包"
+    },
+    "paper-polisher": {
+      "name": "论文润色",
+      "description": "论文草稿润色：语法、清晰度、公式一致性、学术措辞校准"
+    },
+    "robustness-checker": {
+      "name": "鲁棒性检验",
+      "description": "设计并运行鲁棒性、灵敏度、误差和基线对比检验"
+    },
+    "symbol-table-builder": {
+      "name": "符号表构建",
+      "description": "构建和维护全局统一符号表，确保所有子问题符号一致"
+    },
+    "model-selector": {
+      "name": "智能选模",
+      "description": "输入题型关键词，输出推荐模型+算法+风险评估+代码模板路径",
+      "disable-model-invocation": true
+    },
+    "chart-recommender": {
+      "name": "图表推荐",
+      "description": "根据题型和数据特征推荐最佳图表类型，输出 matplotlib 代码模板",
+      "disable-model-invocation": true
+    },
+    "defense-simulator": {
+      "name": "答辩模拟",
+      "description": "模拟答辩评委追问，根据论文内容动态生成问题和评分",
+      "disable-model-invocation": true
+    },
+    "algorithm-runner": {
+      "name": "算法执行",
+      "description": "一键运行算法模板：匹配算法名→适配数据→执行→输出结果JSON",
+      "disable-model-invocation": true
+    },
+    "result-validator": {
+      "name": "结果验证",
+      "description": "验证模型结果数值合理性：范围检查、统计检验、异常值检测",
+      "user-invocable": false
+    },
+    "paper-rewriter": {
+      "name": "段落改写",
+      "description": "论文段落改写：输入原文+目标风格（学术/简洁/有力），输出改写版本"
+    },
+    "diagram-maker": {
+      "name": "流程图生成",
+      "description": "生成数学建模流程图、方法架构图、算法步骤图（Mermaid+matplotlib）"
+    },
+    "interactive-chart": {
+      "name": "交互式图表",
+      "description": "用Plotly生成交互式科学图表：3D曲面、平行坐标、动态时间线、等高线图"
+    },
+    "math-figure": {
+      "name": "数学图表",
+      "description": "数学建模专用：函数图像、几何示意图、向量场、概率分布、等高线+3D曲面"
+    },
+    "network-graph": {
+      "name": "网络图可视化",
+      "description": "图论/网络可视化：最短路径高亮、社区检测着色、交互式网络图（PyVis）"
+    },
+    "academic-defense-pptx": {
+      "name": "学术答辩PPT",
+      "description": "学术答辩/会议报告PPT内容与结构设计（配合pptx skill生成文件）"
+    },
+    "academic-paper-composer": {
+      "name": "学术论文写作",
+      "description": "从优化大纲到投稿就绪稿件的系统化写作框架"
+    },
+    "academic-paper-strategist": {
+      "name": "学术论文规划",
+      "description": "学术论文战略规划：研究空白识别、大纲优化、预印本投稿准备"
+    },
+    "aigc-reduce": {
+      "name": "AIGC降重",
+      "description": "降低学术论文AIGC查重率和AI味，基于知网/万方/PaperPass检测器原理"
+    },
+    "csv-data-summarizer": {
+      "name": "CSV数据摘要",
+      "description": "分析CSV文件，生成摘要统计和快速可视化（pandas）"
+    },
+    "humanizer-zh-academic": {
+      "name": "中文学术降AI",
+      "description": "降低中文学术写作AIGC检测率，AIGC率从>50%降至11%的改写规律"
+    },
+    "consistency-auditor": {
+      "name": "一致性审计",
+      "description": "独立一致性审计：检查论文数字、文件名、符号与frozen_numbers.json的交叉一致性（三审计层第一层）"
+    },
+    "completeness-auditor": {
+      "name": "完整性审计",
+      "description": "独立完整性审计：检查所有审查文件、审计报告、代码审查是否存在且质量达标（三审计层第二层）"
+    },
+    "decision-logger": {
+      "name": "决策日志",
+      "description": "记录用户在选模、结果判断等关键节点的决策理由，确保可追溯"
+    },
+    "feature-engineering": {
+      "name": "特征工程",
+      "description": "特征工程标准化流程：数据预处理、转换、编码、缩放、特征选择"
+    },
+    "algorithm-benchmark": {
+      "name": "算法基准测试",
+      "description": "比较不同算法的性能、精度、速度，帮助选择最优算法"
+    },
+    "style-calibration": {
+      "name": "写作风格校准",
+      "description": "从用户过往作品学习写作风格，使生成的论文更符合用户习惯"
+    },
+    "citation-tracer": {
+      "name": "引用溯源",
+      "description": "验证引用真实性、追踪引用来源、检查引用完整性"
+    },
+    "ai-failure-checker": {
+      "name": "AI失败模式检查",
+      "description": "7-mode blocking checklist：编造、幻觉、逻辑错误、数据一致性、引用真实性、方法适用性、结论合理性"
+    },
+    "typst-renderer": {
+      "name": "Typst论文渲染",
+      "description": "从17套赛事Typst模板选型，注入final_paper_source.md并编译PDF；与Word/LaTeX三选一（v4.2 jihe520）"
+    },
+    "docx-editor-cn": {
+      "name": "Word原生公式与XML编辑",
+      "description": "LaTeX→Word原生OMML公式（temml→MathML→docx）+ 已有docx的XML级局部编辑unpack/pack/validate（v4.2 Gostyan）"
+    },
+    "award-paper-rag": {
+      "name": "O奖论文章节级RAG",
+      "description": "按heading章节分块+13类分类器，年份/题号/章节多维过滤检索190+篇优秀论文（v4.2 Kirito）"
+    }
+  }
+}

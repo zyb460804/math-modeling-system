@@ -1,0 +1,128 @@
+{
+  "schema_version": "1.1",
+  "problem_name": "绿电直连型合成氨园区（旧赛题，2026-06）",
+  "_note": "本文件仅是 qa_config.json 的 schema 示例，全部数值属于旧赛题「绿电直连型合成氨」。换新赛题时：复制本文件到 paper_output/plan/qa_config.json，按新赛题重写所有段；4 个 QA 脚本（run_baseline_comparison / run_sensitivity_analysis / check_parameter_consistency / check_result_reasonableness）在该文件或所需段缺失时输出 SKIP，绝不输出 PASS。",
+  "_consumers": {
+    "run_baseline_comparison.py": ["data_files", "columns(可选)", "model_params", "price_periods", "om_coeffs", "production"],
+    "run_sensitivity_analysis.py": ["data_files", "columns(可选)", "model_params", "price_periods", "om_coeffs", "production", "sensitivity"],
+    "check_parameter_consistency.py": ["expected_params", "param_tolerance(可选)"],
+    "check_result_reasonableness.py": ["reasonable_ranges", "green_constraints(可选)", "green_constraints_apply_to(可选)"]
+  },
+  "data_files": {
+    "_note": "相对 paper_output/data_cleaned/ 的清洗后数据文件名",
+    "load_curve": "附件1：园区典型日常规电负荷标幺功率曲线_cleaned.csv",
+    "renewable_curve": "附件2：典型日风电、光伏标幺功率表_cleaned.csv"
+  },
+  "columns": {
+    "_note": "曲线在 CSV 中的列序号（0 起），缺省为 load=1, wind=1, solar=2",
+    "load": 1,
+    "wind": 1,
+    "solar": 2
+  },
+  "model_params": {
+    "_note": "基准模型参数：装机容量(MW)与分时电价/上网电价(元/kWh)",
+    "P_ALKEL": 10.0,
+    "P_PEMEL": 10.0,
+    "P_NH3": 0.75,
+    "P_WIND": 40.0,
+    "P_SOLAR": 64.0,
+    "P_LOAD_PEAK": 6.0,
+    "PEAK_PRICE": 0.8024,
+    "NORMAL_PRICE": 0.6074,
+    "VALLEY_PRICE": 0.3424,
+    "FEED_IN_PRICE": 0.3779
+  },
+  "price_periods": {
+    "_note": "分时电价时段，[起, 止) 小时；未命中 peak/normal 的按谷价",
+    "peak": [[10, 15], [18, 21]],
+    "normal": [[7, 10], [15, 18], [21, 23]]
+  },
+  "om_coeffs": {
+    "_note": "运维成本系数：wind/solar 按发电量(元/kWh)，alkel/pemel/nh3 按装机×24h(元/kW·h)",
+    "wind": 0.15,
+    "solar": 0.12,
+    "alkel": 0.10,
+    "pemel": 0.15,
+    "nh3": 0.002
+  },
+  "production": {
+    "_note": "日产量(吨)与优化方案的生产小时数",
+    "nh3_daily_ton": 36.0,
+    "optimized_hours": 12
+  },
+  "sensitivity": {
+    "_note": "灵敏度分析：参数名(须在 model_params 中) -> 相对扰动比例列表",
+    "P_WIND": [-0.10, -0.05, 0, 0.05, 0.10],
+    "P_SOLAR": [-0.10, -0.05, 0, 0.05, 0.10],
+    "PEAK_PRICE": [-0.20, -0.10, 0, 0.10, 0.20]
+  },
+  "expected_params": {
+    "_note": "题目给定参数，按问编号；代码文件按约定 paper_output/code/modeling/{qi}_model.py 查找。Q1=36吨/日产能，Q2-Q4=72吨/日产能",
+    "Q1": {
+      "P_ALKEL": 10.0,
+      "P_PEMEL": 10.0,
+      "P_NH3": 0.75,
+      "NH3_RATE": 1.5,
+      "P_WIND": 40.0,
+      "P_SOLAR": 64.0,
+      "P_LOAD_PEAK": 6.0,
+      "NH3_DAILY": 36.0
+    },
+    "Q2": {
+      "P_ALKEL": 20.0,
+      "P_PEMEL": 20.0,
+      "P_NH3": 1.5,
+      "NH3_RATE": 3.0,
+      "P_WIND": 40.0,
+      "P_SOLAR": 64.0,
+      "P_LOAD_PEAK": 6.0
+    },
+    "Q3": {
+      "P_ALKEL": 20.0,
+      "P_PEMEL": 20.0,
+      "P_NH3": 1.5,
+      "NH3_RATE": 3.0,
+      "P_WIND": 40.0,
+      "P_SOLAR": 64.0,
+      "P_LOAD_PEAK": 6.0
+    },
+    "Q4": {
+      "P_ALKEL": 20.0,
+      "P_PEMEL": 20.0,
+      "P_NH3": 1.5,
+      "NH3_RATE": 3.0,
+      "P_WIND": 40.0,
+      "P_SOLAR": 64.0,
+      "P_LOAD_PEAK": 6.0
+    }
+  },
+  "param_tolerance": 0.01,
+  "reasonable_ranges": {
+    "_note": "结果合理范围，按问编号：指标 -> [min, max, 说明]；结果文件按约定 paper_output/results/{qi}_results.json 查找",
+    "Q1": {
+      "self_use_ratio": [0.10, 0.95, "自发自用比例应在10%-95%之间"],
+      "green_ratio": [0.20, 0.95, "绿电比例应在20%-95%之间"],
+      "feed_in_ratio": [0.01, 0.80, "上网比例应在1%-80%之间"],
+      "ton_nh3_cost": [2000, 15000, "吨氨成本应在2000-15000元/吨之间"],
+      "E_load_kWh": [100000, 2000000, "日用电量应在10万-200万kWh之间"],
+      "E_re_kWh": [100000, 3000000, "新能源发电量应在10万-300万kWh之间"]
+    },
+    "Q2": {
+      "ton_nh3_cost": [2000, 15000, "吨氨成本应在2000-15000元/吨之间"],
+      "optimal_daily_output": [36, 72, "最优日产量应在36-72吨之间"]
+    },
+    "Q3": {
+      "ton_nh3_cost": [2000, 15000, "吨氨成本应在2000-15000元/吨之间"]
+    },
+    "Q4": {
+      "ton_nh3_cost": [2000, 20000, "离网吨氨成本应在2000-20000元/吨之间"]
+    }
+  },
+  "green_constraints": {
+    "_note": "绿电指标约束：指标 -> [阈值, '>='或'<=', 说明]，仅对 green_constraints_apply_to 列出的问生效",
+    "self_use_ratio": [0.60, ">=", "新能源自发自用电量占总可用发电量比例应>60%"],
+    "green_ratio": [0.30, ">=", "总用电量绿电比例应>30%"],
+    "feed_in_ratio": [0.20, "<=", "新能源上网电量比例应<20%"]
+  },
+  "green_constraints_apply_to": ["Q1"]
+}

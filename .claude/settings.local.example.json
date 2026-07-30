@@ -1,0 +1,15 @@
+{
+  "_README": "这是 settings.local.json 的模板。复制为 settings.local.json 后，按需添加你自己的权限。此文件被 .gitignore 排除，不会入仓。",
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(pip install *)",
+      "Bash(git *)",
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep"
+    ]
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "version": "1.0-ported",
+  "_doc": "题型差异化加权表。融合自 handsomeZR/mathmodel-skill@v6.1 config/dim_weights.json（2026-07-22）。本项目原评分扁平（7模块同一套权重），此表补齐 competition×task_type 差异化加权。两套用法：(1) stage_dim_weights 供新反馈层 L1/L3 阶段级 critic；(2) module_weights_7dim 供现有 paper-reviewer agent 的 7 模块制。权重 clamp [0.7,1.5]，default 全 1.0 等价老逻辑。",
+  "_clamp": {"min": 0.7, "max": 1.5},
+  "_integration": {
+    "scoring_rubric": "outputs/scoring_rubric.md（7 模块 100 分制，不改分值，只对得分按题型加权后再判等）",
+    "empirical_anchor": "outputs/empirical.json by_topic（分题型分位与此表 task_type 对齐）",
+    "paper_reviewer_agent": ".claude/agents/paper-reviewer.md（§3 评分时按 task_type 加权）"
+  },
+
+  "module_weights_7dim": {
+    "_doc": "供 paper-reviewer agent 的 7 模块制使用。键 = 模块名，值 = 该题型的权重（默认 1.0）。加权后总分 = Σ(模块得分 × 权重) / Σ权重，仍映射回 0-100。task_type 由 problem_analysis.json 的 task_type 字段决定。",
+    "_modules": {"审题": 15, "建模": 20, "求解与算法": 20, "结果分析": 15, "稳健性与误差": 10, "论文写作": 15, "答辩": 5},
+    "default": {"审题": 1.0, "建模": 1.0, "求解与算法": 1.0, "结果分析": 1.0, "稳健性与误差": 1.0, "论文写作": 1.0, "答辩": 1.0},
+    "A_optimization":         {"_note": "优化/规划：加权建模、求解可行性、稳健性",            "建模": 1.2, "求解与算法": 1.3, "稳健性与误差": 1.3, "结果分析": 1.1},
+    "B_evaluation":           {"_note": "评价/决策：加权指标体系与可解释性",                  "建模": 1.3, "结果分析": 1.2, "求解与算法": 1.1},
+    "C_data":                 {"_note": "数据/分析：加权数据处理、稳健性、结果呈现",          "求解与算法": 1.3, "稳健性与误差": 1.3, "结果分析": 1.2, "论文写作": 1.1},
+    "D_industrial":           {"_note": "工程/机理：加权求解可行性与稳健性",                  "求解与算法": 1.3, "稳健性与误差": 1.2, "建模": 1.1},
+    "E_creative":             {"_note": "开放/综合：加权选择依据、假设与写作",                "建模": 1.2, "论文写作": 1.2, "审题": 1.1},
+    "F_policy":               {"_note": "政策/管理：加权写作、推广与结果解释",                "论文写作": 1.4, "结果分析": 1.2, "审题": 1.1},
+    "prediction":             {"_note": "预测类：加权求解、结果分析与稳健性",                 "求解与算法": 1.3, "结果分析": 1.3, "稳健性与误差": 1.2},
+    "classification_clustering": {"_note": "分类聚类：加权求解与结果分析",                    "求解与算法": 1.3, "结果分析": 1.2}
+  },
+
+  "stage_dim_weights": {
+    "_doc": "原 mathmodel-skill 的 stage×dim 权重表，供新反馈层 L1 阶段级 critic 与 L3 panel 使用。stage 编号见 .claude/skills/quality-assurance-auditor/references/feedback_layer1_critic.md。未列出的 dim 默认 1.0；task_type=default 全 1.0。",
+
+    "cumcm": {
+      "default": {"_note": "全 1.0, 等价老逻辑"},
+      "A_optimization": {
+        "_note": "A 优化题: 加权候选覆盖 / 选择依据 / 求解可行性 / 灵敏度",
+        "3": {"1_candidate_diversity": 1.2, "2_selection_rationale": 1.3, "4_solver_feasibility": 1.2},
+        "5": {"1_subproblem_completeness": 1.0, "2_cross_reference_chain": 1.2},
+        "6": {"1_multivariate_perturbation": 1.3, "4_robust_interval_quantitative": 1.2}
+      },
+      "B_evaluation": {
+        "_note": "B 评价类: 加权指标体系 / 权重合理性 / 可解释性",
+        "3": {"2_selection_rationale": 1.3, "5_literature_support": 1.2},
+        "5": {"1_subproblem_completeness": 1.2, "3_symbol_consistency": 1.2},
+        "8": {"3_formulas_figures_citations": 1.2}
+      },
+      "C_data": {
+        "_note": "C 数据题: 加权数据处理 / 灵敏度 / 证据呈现",
+        "2": {"4_data_alignment": 1.4},
+        "5": {"1_subproblem_completeness": 1.3, "4_visual_density": 1.3},
+        "6": {"1_multivariate_perturbation": 1.4, "3_output_completeness": 1.2},
+        "8": {"3_formulas_figures_citations": 1.2}
+      },
+      "D_industrial": {
+        "_note": "D 工程类: 加权解可行性 / 工程实现",
+        "3": {"4_solver_feasibility": 1.3},
+        "5": {"1_subproblem_completeness": 1.2, "5_time_budget": 1.2},
+        "7": {"1_strengths_specific": 1.2, "4_generalization_concrete": 1.2}
+      },
+      "E_creative": {
+        "_note": "E 开放题: 加权选择依据 / 结构性候选 / 假设支撑 / 写作",
+        "3": {"2_selection_rationale": 1.4, "1_candidate_diversity": 1.2},
+        "4": {"2_assumption_support": 1.2},
+        "8": {"4_language_quality": 1.2, "5_visual_consistency": 1.2}
+      }
+    },
+
+    "mcm": {
+      "default": {"_note": "美赛默认: 加权可解释的设计选择与 communication；不以命名制造 novelty", "3": {"2_selection_rationale": 1.3}, "8": {"3_communication_clarity": 1.3}},
+      "A_continuous":        {"3": {"2_selection_rationale": 1.3, "5_literature_support": 1.2}, "4": {"2_assumption_support": 1.3}, "5": {"1_subproblem_completeness": 1.2}},
+      "B_discrete":          {"3": {"2_selection_rationale": 1.2, "4_solver_feasibility": 1.3}, "5": {"2_cross_reference_chain": 1.2}},
+      "C_data":              {"2": {"4_data_alignment": 1.4}, "6": {"1_multivariate_perturbation": 1.4}, "8": {"3_communication_clarity": 1.3, "5_reproducibility": 1.3}},
+      "D_network":           {"2": {"1_subproblem_decomposition": 1.3}, "3": {"4_solver_feasibility": 1.3}},
+      "E_interdisciplinary": {"3": {"2_selection_rationale": 1.4, "5_literature_support": 1.3}, "4": {"2_assumption_support": 1.3}, "8": {"3_communication_clarity": 1.4}},
+      "F_policy":            {"3": {"2_selection_rationale": 1.3}, "7": {"4_generalization_concrete": 1.4}, "8": {"3_communication_clarity": 1.5, "2_section_completeness": 1.3}}
+    },
+
+    "diangong": {
+      "default": {"_note": "电工杯默认: 加权数据完整性 + 工程实用性", "2": {"4_data_alignment": 1.4}, "5": {"5_time_budget": 1.3, "1_subproblem_completeness": 1.2}, "7": {"4_generalization_concrete": 1.3, "1_strengths_specific": 1.2}, "8": {"5_visual_engineering": 1.2}},
+      "A_engineering":      {"2": {"4_data_alignment": 1.4}, "5": {"4_visual_density": 1.3, "5_time_budget": 1.3}, "6": {"1_multivariate_perturbation": 1.3, "4_robust_interval_quantitative": 1.3}},
+      "B_data_engineering": {"2": {"4_data_alignment": 1.5}, "5": {"1_subproblem_completeness": 1.3, "4_visual_density": 1.2}, "8": {"5_visual_engineering": 1.3}}
+    }
+  }
+}

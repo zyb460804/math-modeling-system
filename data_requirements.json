@@ -1,0 +1,22 @@
+{
+    "tasks": [
+        {
+            "type": "direct_download",
+            "url": "https://example.com/data.csv",
+            "save_name": "example_data.csv",
+            "active": false
+        },
+        {
+            "type": "scrape_tables",
+            "url": "https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)",
+            "save_prefix": "gdp_table",
+            "active": false
+        },
+        {
+            "type": "manual_search",
+            "query": "2023年全球半导体产量统计",
+            "notes": "Need to find authoritative report manually if API fails",
+            "active": false
+        }
+    ]
+}

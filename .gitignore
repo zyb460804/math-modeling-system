@@ -1,0 +1,78 @@
+# ============================================================
+# 数学建模生产系统 .gitignore
+# 分享版：核心骨架入仓，资料库/个人产物/本机配置排除
+# ============================================================
+
+# ---------- 资料库（261GB+，含第三方版权，不入仓）----------
+resources/
+problem_files/
+crawled_data/
+
+# ---------- 个人产物（隐私 + 版权）----------
+05_我的作品/
+deliverables/
+
+# paper_output：只保留文档骨架，排除个人赛题产物
+paper_output/code/
+paper_output/data_cleaned/
+paper_output/results/
+paper_output/tables/
+paper_output/figures/
+paper_output/state/
+paper_output/qa/
+paper_output/step1/
+paper_output/plan/
+paper_output/_archive_*/
+paper_output/final_paper*
+paper_output/research/port_backup_*/
+paper_output/research/sources/
+paper_output/research/sources_extra/
+
+# ---------- 本机配置（含绝对路径）----------
+.claude/settings.local.json
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---------- Node ----------
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# ---------- LaTeX ----------
+*.aux
+*.bbl
+*.blg
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.out
+
+# ---------- Typst ----------
+*.typ-preview
+
+# ---------- 系统/编辑器 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+~$*
+*.tmp
+*.swp
+*.swo
+.idea/
+*.code-workspace
+
+# ---------- 向量索引（81MB，用户按需重建）----------
+.claude/skills/award-paper-rag/storage/
+.claude/skills/award-paper-rag/data/nodes/
+
+# ---------- 临时/日志 ----------
+*.log
+.tmp/

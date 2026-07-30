@@ -1,0 +1,9 @@
+# RAG 索引依赖。若全局环境冲突，建议建独立 venv：
+#   python -m venv .venv && .venv\Scripts\activate && pip install -r requirements.txt
+# 注：不再用 llama-index meta 包（与实际安装脱节），改为按实际 import 声明。
+llama-index-core>=0.10
+llama-index-embeddings-openai
+llama-index-llms-openai
+# build/retrieve 离线 embedding（HuggingFace 本地模型）
+llama-index-embeddings-huggingface
+sentence-transformers

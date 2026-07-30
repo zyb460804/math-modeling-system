@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "description": "L2 Fallback Hand Off 路由表：主方法失败时的备用链。融合自 jihe520 四层容错设计的 L2 层。每条路由按顺序尝试，记录到 qa/fallback_log.json。备用方法对应 resources/04_代码模板/ 与 resources/10_算法cookbook/ 中的实现。",
+  "routes": {
+    "optimization": {
+      "description": "优化类：多目标/单目标求解失败",
+      "chain": [
+        {"method": "NSGA-II", "template": "resources/04_代码模板/Python/optimization/", "when": "多目标 + 非凸可行域"},
+        {"method": "GA 遗传算法", "template": "resources/04_代码模板/Python/optimization/", "when": "NSGA-II 不收敛或种群退化"},
+        {"method": "SA 模拟退火", "template": "resources/04_代码模板/Python/optimization/", "when": "GA 陷入局部最优"},
+        {"method": "scipy.optimize (SLSQP/LP)", "template": "scipy.optimize.minimize", "when": "可线性化/连续化降级"}
+      ]
+    },
+    "clustering": {
+      "description": "聚类类：簇数未知/非凸分布",
+      "chain": [
+        {"method": "K-Means", "template": "resources/04_代码模板/Python/evaluation/", "when": "默认起点"},
+        {"method": "DBSCAN", "template": "resources/04_代码模板/Python/evaluation/", "when": "K-Means 无法处理噪声/非球状簇"},
+        {"method": "GMM 高斯混合", "template": "resources/04_代码模板/Python/statistical/", "when": "需要软划分/概率归属"},
+        {"method": "层次聚类", "template": "scipy.cluster.hierarchy", "when": "需要谱系树/不确定簇数"}
+      ]
+    },
+    "evaluation": {
+      "description": "评价/决策类：赋权或排序失败",
+      "chain": [
+        {"method": "TOPSIS", "template": "resources/04_代码模板/Python/evaluation/", "when": "默认主方法"},
+        {"method": "熵权法", "template": "resources/04_代码模板/Python/evaluation/", "when": "TOPSIS 主观权争议 → 改客观权"},
+        {"method": "AHP 层次分析", "template": "resources/04_代码模板/Python/evaluation/", "when": "需要主观判断矩阵"},
+        {"method": "FAHP/CRITIC 组合赋权", "template": "resources/04_代码模板/Python/evaluation/", "when": "单一赋权不一致 → 组合"}
+      ]
+    },
+    "prediction": {
+      "description": "预测类：时序/回归失败",
+      "chain": [
+        {"method": "ARIMA/SARIMA", "template": "resources/04_代码模板/Python/prediction/", "when": "默认时序起点"},
+        {"method": "灰色 GM(1,1)", "template": "resources/04_代码模板/Python/prediction/", "when": "小样本 + ARIMA 不稳"},
+        {"method": "LSTM/神经网络", "template": "resources/04_代码模板/Python/ml/", "when": "非线性强 + 样本充足"},
+        {"method": "线性回归/多项式回归", "template": "scikit-learn", "when": "降级为可解释基线"}
+      ]
+    },
+    "ml": {
+      "description": "机器学习类：分类/回归失败",
+      "chain": [
+        {"method": "XGBoost", "template": "resources/04_代码模板/Python/ml/", "when": "默认强基线"},
+        {"method": "RandomForest", "template": "resources/04_代码模板/Python/ml/", "when": "XGBoost 过拟合"},
+        {"method": "SVM", "template": "resources/04_代码模板/Python/ml/", "when": "小样本高维"},
+        {"method": "Logistic/线性模型", "template": "scikit-learn", "when": "降级可解释基线"}
+      ]
+    },
+    "latex_compile": {
+      "description": "排版类：LaTeX 编译失败",
+      "chain": [
+        {"method": "LaTeX (重试3次修语法)", "template": "resources/13_LaTeX模板/", "when": "默认主链路"},
+        {"method": "Typst", "template": "resources/15_Typst模板/ + typst-renderer", "when": "LaTeX 编译反复失败 → 切 Typst（毫秒级编译）"},
+        {"method": "Word (python-docx)", "template": "paper-formal-writer", "when": "Typst 也无环境 → 回 Word 主交付"}
+      ]
+    },
+    "word_formula": {
+      "description": "Word 公式类：OMML 注入失败",
+      "chain": [
+        {"method": "python-docx 内联公式", "template": "paper-formal-writer", "when": "默认主链路"},
+        {"method": "temml→MathML→docx 原生公式", "template": "docx-editor-cn", "when": "内联公式渲染差 → 原生 OMML"},
+        {"method": "公式截图嵌入", "template": "latex-renderer (PNG)", "when": "原生公式仍失败 → 图片兜底"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,727 @@
+{
+  "schema_version": "1.0",
+  "description": "算法名→代码文件路径映射表。build_result_contracts.py 通过此表查找真实算法代码。",
+  "base_paths": {
+    "essential": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码",
+    "common": "resources/04_代码模板/50多种常用算法源代码"
+  },
+  "algorithms": [
+    {
+      "id": "topsis",
+      "display_name": "TOPSIS",
+      "task_type": "evaluation",
+      "keywords": ["TOPSIS", "逼近理想解", "优劣解距离", "理想解法"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/评价类 - TOPSIS 法.py",
+      "alt_file_path": "resources/04_代码模板/50多种常用算法源代码/TOPSIS综合评价法Matlab+Python代码/topsis_python_final.py",
+      "function_name": "topsis",
+      "imports": ["numpy", "pandas"],
+      "pip_packages": []
+    },
+    {
+      "id": "entropy_weight",
+      "display_name": "熵权法",
+      "task_type": "evaluation",
+      "keywords": ["熵权法", "熵权", "entropy", "客观赋权"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/评价类 - 熵权法.py",
+      "alt_file_path": "resources/04_代码模板/50多种常用算法源代码/熵权法Matlab+Python代码/entropy_python_final.py",
+      "function_name": "entropy_weight",
+      "imports": ["numpy", "pandas"],
+      "pip_packages": []
+    },
+    {
+      "id": "ahp",
+      "display_name": "层次分析法",
+      "task_type": "evaluation",
+      "keywords": ["AHP", "层次分析", "层次分析法", "analytic hierarchy"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/层次分析法Matlab+Python代码/ahp_python_final.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "dea",
+      "display_name": "DEA数据包络分析",
+      "task_type": "evaluation",
+      "keywords": ["DEA", "数据包络", "效率评价", "投入产出"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/DEA综合评价法Matlab+Python代码/dea_python_final.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.optimize"],
+      "pip_packages": []
+    },
+    {
+      "id": "grey_relational",
+      "display_name": "灰色关联分析",
+      "task_type": "evaluation",
+      "keywords": ["灰色关联", "灰色关联分析", "关联度"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/灰色关联分析法Matlab+Python代码/grey_python_final.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "fuzzy_evaluation",
+      "display_name": "模糊综合评价",
+      "task_type": "evaluation",
+      "keywords": ["模糊综合评价", "模糊评价", "模糊数学"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/模糊综合评价法Matlab+Python代码/fuzzy_python_final.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "nn_evaluation",
+      "display_name": "神经网络综合评价",
+      "task_type": "evaluation",
+      "keywords": ["神经网络评价", "神经网络综合评价"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/神经网络综合评价法Matlab+Python代码/nn_python_final.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.neural_network"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "rsr",
+      "display_name": "秩和比综合评价",
+      "task_type": "evaluation",
+      "keywords": ["秩和比", "RSR"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/秩和比综合评价法/rsr_python_final.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "arma_arima",
+      "display_name": "ARMA/ARIMA时间序列",
+      "task_type": "forecasting",
+      "keywords": ["ARIMA", "ARMA", "时间序列", "自回归", "移动平均模型"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/ARMA时间序列预测模型Matlab+Python代码/arma_prediction.py",
+      "function_name": "main",
+      "imports": ["numpy", "statsmodels.tsa.arima.model"],
+      "pip_packages": ["statsmodels"]
+    },
+    {
+      "id": "grey_prediction",
+      "display_name": "灰色预测GM(1,1)",
+      "task_type": "forecasting",
+      "keywords": ["灰色预测", "GM(1,1)", "灰色模型", "灰色系统"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/灰色预测模型Matlab+Python代码/grey_prediction.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "logistic_prediction",
+      "display_name": "Logistic增长预测",
+      "task_type": "forecasting",
+      "keywords": ["Logistic", "逻辑增长", "生长曲线", "S曲线"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/Logistic预测模型Matlab+Python代码/logistic_prediction.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.optimize"],
+      "pip_packages": []
+    },
+    {
+      "id": "bp_neural_network",
+      "display_name": "BP神经网络预测",
+      "task_type": "forecasting",
+      "keywords": ["BP神经网络", "BP网络", "神经网络预测", "MLP"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/BP神经网络预测模型Matlab+Python代码/bp_neural_network.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.neural_network"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "regression",
+      "display_name": "回归分析预测",
+      "task_type": "forecasting",
+      "keywords": ["回归分析", "线性回归", "多元回归", "回归预测"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/回归分析预测模型Matlab+Python代码/regression_analysis.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.linear_model"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "exponential_smoothing",
+      "display_name": "二次指数平滑",
+      "task_type": "forecasting",
+      "keywords": ["指数平滑", "二次指数", "指数平滑预测"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/二次指数平滑预测Matlab+Python代码/quadratic_exponential_smoothing.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "gaussian_process",
+      "display_name": "高斯回归预测",
+      "task_type": "forecasting",
+      "keywords": ["高斯回归", "高斯过程", "GPR", "高斯预测"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/高斯回归预测模型Matlab+Python代码/gaussian_process_regression.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.gaussian_process"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "markov",
+      "display_name": "马尔可夫预测",
+      "task_type": "forecasting",
+      "keywords": ["马尔可夫", "马尔科夫", "Markov", "转移概率"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/马尔可夫预测模型Matlab+Python代码/markov_prediction.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "random_forest_regressor",
+      "display_name": "随机森林回归",
+      "task_type": "forecasting",
+      "keywords": ["随机森林回归", "随机森林预测", "RF回归"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/预测类 - 随机森林回归.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.ensemble"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "xgboost",
+      "display_name": "XGBoost预测",
+      "task_type": "forecasting",
+      "keywords": ["XGBoost", "xgboost", "梯度提升"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/XGBoost（预测类）.py",
+      "function_name": "main",
+      "imports": ["numpy", "xgboost"],
+      "pip_packages": ["xgboost"]
+    },
+    {
+      "id": "prophet",
+      "display_name": "Prophet时间序列",
+      "task_type": "forecasting",
+      "keywords": ["Prophet", "prophet", "Facebook预测"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/Prophet（时间序列预测）.py",
+      "function_name": "main",
+      "imports": ["numpy", "prophet"],
+      "pip_packages": ["prophet"]
+    },
+    {
+      "id": "moving_average",
+      "display_name": "移动平均预测",
+      "task_type": "forecasting",
+      "keywords": ["移动平均", "滑动平均", "移动平均法"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/预测类 - 时间序列移动平均.py",
+      "function_name": "main",
+      "imports": ["numpy", "pandas"],
+      "pip_packages": []
+    },
+    {
+      "id": "seasonal_index",
+      "display_name": "季节指数预测",
+      "task_type": "forecasting",
+      "keywords": ["季节指数", "季节性", "季节分解"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/季节指数预测模型Matlab+Python代码/seasonal_index_prediction.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "random_forest_clf",
+      "display_name": "随机森林分类",
+      "task_type": "classification",
+      "keywords": ["随机森林分类", "随机森林识别", "RF分类"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/分类类 - 随机森林分类.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.ensemble"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "lightgbm",
+      "display_name": "LightGBM分类",
+      "task_type": "classification",
+      "keywords": ["LightGBM", "lightgbm", "LGBM"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/LightGBM（分类类）.py",
+      "function_name": "main",
+      "imports": ["numpy", "lightgbm"],
+      "pip_packages": ["lightgbm"]
+    },
+    {
+      "id": "knn",
+      "display_name": "KNN分类",
+      "task_type": "classification",
+      "keywords": ["KNN", "knn", "K近邻", "最近邻"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/KNN 分类模型Matlab+Python代码/knn_classification.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.neighbors"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "decision_tree",
+      "display_name": "决策树分类",
+      "task_type": "classification",
+      "keywords": ["决策树", "CART", "决策树分类"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/决策树分类模型Matlab+Python代码/decision_tree_classification.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.tree"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "naive_bayes",
+      "display_name": "朴素贝叶斯分类",
+      "task_type": "classification",
+      "keywords": ["朴素贝叶斯", "贝叶斯分类", "NaiveBayes"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/朴素贝叶斯分类模型Matlab+Python代码/naive_bayes_classification.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.naive_bayes"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "svm",
+      "display_name": "SVM支持向量机",
+      "task_type": "classification",
+      "keywords": ["SVM", "支持向量", "向量机"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/Logistic预测模型Matlab+Python代码/logistic_prediction.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.svm"],
+      "pip_packages": ["scikit-learn"],
+      "note": "SVM分类代码与Logistic共用目录，需适配"
+    },
+    {
+      "id": "kmeans",
+      "display_name": "K-Means聚类",
+      "task_type": "clustering",
+      "keywords": ["K-Means", "Kmeans", "kmeans", "K均值", "K-均值"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/K-means 聚类算法Matlab+Python代码/kmeans_clustering.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.cluster"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "hierarchical",
+      "display_name": "层次聚类",
+      "task_type": "clustering",
+      "keywords": ["层次聚类", "系统聚类", "凝聚聚类"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/层次聚类算法Matlab+Python代码/hierarchical_clustering.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "gmm",
+      "display_name": "高斯混合模型聚类",
+      "task_type": "clustering",
+      "keywords": ["GMM", "高斯混合", "混合高斯", "EM聚类"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/高斯混合聚类模型（GMM）/gaussian_mixture.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.mixture"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "som",
+      "display_name": "SOM自组织映射",
+      "task_type": "clustering",
+      "keywords": ["SOM", "自组织", "自组织映射", "自组织网络"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/SOM 自组织神经网络Matlab+Python代码/som_clustering.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "linear_programming",
+      "display_name": "线性规划",
+      "task_type": "optimization",
+      "keywords": ["线性规划", "LP", "线性优化", "单纯形"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/线性规划模型Matlab+Python代码/linear_programming.py",
+      "function_name": "main",
+      "imports": ["pulp", "numpy"],
+      "pip_packages": ["pulp"]
+    },
+    {
+      "id": "integer_programming",
+      "display_name": "整数规划",
+      "task_type": "optimization",
+      "keywords": ["整数规划", "整数优化", "IP"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/整数规划模型/integer_programming.py",
+      "function_name": "main",
+      "imports": ["pulp"],
+      "pip_packages": ["pulp"]
+    },
+    {
+      "id": "zero_one_programming",
+      "display_name": "0-1整数规划",
+      "task_type": "optimization",
+      "keywords": ["0-1规划", "0-1整数", "二进制规划", "离散优化", "0-1"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/0-1规划模型Matlab+Python代码/zero_one_programming.py",
+      "function_name": "main",
+      "imports": ["pulp"],
+      "pip_packages": ["pulp"]
+    },
+    {
+      "id": "nonlinear_programming",
+      "display_name": "非线性规划",
+      "task_type": "optimization",
+      "keywords": ["非线性规划", "非线性优化", "NLP", "非线性"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/非线性规划模型Matlab+Python代码/nonlinear_programming.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.optimize"],
+      "pip_packages": []
+    },
+    {
+      "id": "multi_objective_programming",
+      "display_name": "多目标规划",
+      "task_type": "optimization",
+      "keywords": ["多目标规划", "多目标优化", "多目标"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/多目标规划模型Matlab+Python代码/multi_objective_programming.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.optimize"],
+      "pip_packages": []
+    },
+    {
+      "id": "genetic_algorithm",
+      "display_name": "遗传算法",
+      "task_type": "optimization",
+      "keywords": ["遗传算法", "GA", "遗传优化"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/优化类 - 遗传算法.py",
+      "alt_file_path": "resources/04_代码模板/50多种常用算法源代码/遗传算法Matlab+Python代码/genetic_algorithm.py",
+      "function_name": "genetic_algorithm",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "pso",
+      "display_name": "粒子群优化",
+      "task_type": "optimization",
+      "keywords": ["粒子群", "PSO", "粒子群优化", "粒子群算法"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/优化类 - 粒子群优化（PSO）.py",
+      "alt_file_path": "resources/04_代码模板/50多种常用算法源代码/粒子群算法Matlab+Python代码/particle_swarm.py",
+      "function_name": "pso_algorithm",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "aco",
+      "display_name": "蚁群算法",
+      "task_type": "optimization",
+      "keywords": ["蚁群算法", "蚁群", "ACO", "蚁群优化"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/优化类 - 蚁群算法（TSP）.py",
+      "function_name": "aco_tsp",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "simulated_annealing",
+      "display_name": "模拟退火",
+      "task_type": "optimization",
+      "keywords": ["模拟退火", "退火算法", "SA"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/模拟退火Matlab+Python代码/simulated_annealing.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "nsga2",
+      "display_name": "NSGA-II多目标优化",
+      "task_type": "optimization",
+      "keywords": ["NSGA", "NSGA-II", "Pareto", "多目标遗传"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/NSGA-II（多目标优化）.py",
+      "function_name": "nsga2",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "dynamic_programming",
+      "display_name": "动态规划",
+      "task_type": "optimization",
+      "keywords": ["动态规划", "背包问题", "DP"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/动态优化模型Matlab+Python代码/dynamic_programming.py",
+      "function_name": "main",
+      "imports": [],
+      "pip_packages": []
+    },
+    {
+      "id": "steepest_descent",
+      "display_name": "最速下降法",
+      "task_type": "optimization",
+      "keywords": ["最速下降", "梯度下降", "梯度法"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/最速下降法/steepest_descent.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "ode_population",
+      "display_name": "微分方程种群增长",
+      "task_type": "simulation",
+      "keywords": ["微分方程", "种群增长", "ODE", "常微分"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/机理分析 - 微分方程（种群增长）.py",
+      "function_name": "logistic_model",
+      "imports": ["numpy", "scipy.integrate"],
+      "pip_packages": []
+    },
+    {
+      "id": "sir_model",
+      "display_name": "SIR传染病模型",
+      "task_type": "simulation",
+      "keywords": ["SIR", "传染病", "传播模型", "系统动力学", "传染病模型"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/系统动力学（SD）简化版（基于微分方程）.py",
+      "alt_file_path": "resources/04_代码模板/50多种常用算法源代码/传染病模型Matlab+Python代码/epidemic_model.py",
+      "function_name": "sir_model",
+      "imports": ["numpy", "scipy.integrate"],
+      "pip_packages": []
+    },
+    {
+      "id": "population_model",
+      "display_name": "人口模型",
+      "task_type": "simulation",
+      "keywords": ["人口模型", "Logistic增长", "人口预测"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/人口模型Matlab+Python代码/population_model.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.integrate"],
+      "pip_packages": []
+    },
+    {
+      "id": "war_model",
+      "display_name": "Lanchester战争模型",
+      "task_type": "simulation",
+      "keywords": ["战争模型", "Lanchester", "战斗模型"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/战争模型Matlab+Python代码/war_model.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.integrate"],
+      "pip_packages": []
+    },
+    {
+      "id": "pca",
+      "display_name": "PCA主成分分析",
+      "task_type": "preprocessing",
+      "keywords": ["PCA", "主成分", "降维", "主成分分析"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/数据预处理 - PCA 降维.py",
+      "alt_file_path": "resources/04_代码模板/50多种常用算法源代码/PCA 主成分分析法Matlab+Python代码/pca_analysis.py",
+      "function_name": "main",
+      "imports": ["numpy", "sklearn.decomposition"],
+      "pip_packages": ["scikit-learn"]
+    },
+    {
+      "id": "iqr_outlier",
+      "display_name": "IQR异常值检测",
+      "task_type": "preprocessing",
+      "keywords": ["IQR", "异常值", "异常检测", "离群值"],
+      "file_path": "resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/IQR 异常值检测.py",
+      "function_name": "iqr_detect",
+      "imports": ["numpy", "pandas"],
+      "pip_packages": []
+    },
+    {
+      "id": "dijkstra",
+      "display_name": "Dijkstra最短路径",
+      "task_type": "graph",
+      "keywords": ["Dijkstra", "最短路径", "最短路", "迪杰斯特拉"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/Dijkstra 算法（最短路径算法）Matlab+Python代码/dijkstra_algorithm.py",
+      "function_name": "main",
+      "imports": ["numpy", "networkx"],
+      "pip_packages": ["networkx"]
+    },
+    {
+      "id": "floyd",
+      "display_name": "Floyd全源最短路径",
+      "task_type": "graph",
+      "keywords": ["Floyd", "全源最短", "弗洛伊德"],
+      "file_path": "resources/04_代码模板/50多种常用算法源代码/Floyd 算法（全源最短路径算法）Matlab+Python代码/floyd_algorithm.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "dea_efficiency",
+      "display_name": "DEA数据包络分析",
+      "task_type": "evaluation",
+      "keywords": ["DEA", "数据包络", "效率分析", "DEA效率", "投入产出效率"],
+      "file_path": "resources/04_代码模板/Python/evaluation/dea_efficiency.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.optimize"],
+      "pip_packages": []
+    },
+    {
+      "id": "fahp_fuzzy",
+      "display_name": "模糊层次分析法FAHP",
+      "task_type": "evaluation",
+      "keywords": ["FAHP", "模糊层次分析", "模糊AHP", "fuzzy AHP"],
+      "file_path": "resources/04_代码模板/Python/evaluation/fahp_fuzzy.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "rsr_rank_sum",
+      "display_name": "秩和比法RSR",
+      "task_type": "evaluation",
+      "keywords": ["RSR", "秩和比", "秩和比法", "rank sum ratio"],
+      "file_path": "resources/04_代码模板/Python/evaluation/rsr_rank_sum.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.stats"],
+      "pip_packages": []
+    },
+    {
+      "id": "grey_relational_heatmap",
+      "display_name": "灰色关联分析+热力图",
+      "task_type": "evaluation",
+      "keywords": ["灰色关联", "灰色关联热力图", "关联度热力图", "grey relational heatmap"],
+      "file_path": "resources/04_代码模板/Python/evaluation/grey_relational_heatmap.py",
+      "function_name": "main",
+      "imports": ["numpy", "seaborn", "matplotlib.pyplot"],
+      "pip_packages": ["seaborn"]
+    },
+    {
+      "id": "grey_prediction_gm11",
+      "display_name": "GM(1,1)灰色预测",
+      "task_type": "forecasting",
+      "keywords": ["GM(1,1)", "灰色预测", "GM11", "灰色模型预测"],
+      "file_path": "resources/04_代码模板/Python/prediction/grey_prediction_gm11.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "markov_chain",
+      "display_name": "马尔可夫链",
+      "task_type": "forecasting",
+      "keywords": ["马尔可夫链", "Markov chain", "状态转移", "马尔可夫链预测"],
+      "file_path": "resources/04_代码模板/Python/prediction/markov_chain.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    },
+    {
+      "id": "hmm_hidden_markov",
+      "display_name": "HMM隐马尔可夫",
+      "task_type": "forecasting",
+      "keywords": ["HMM", "隐马尔可夫", "隐马尔可夫模型", "hidden markov"],
+      "file_path": "resources/04_代码模板/Python/prediction/hmm_hidden_markov.py",
+      "function_name": "main",
+      "imports": ["numpy", "hmmlearn.hmm"],
+      "pip_packages": ["hmmlearn"]
+    },
+    {
+      "id": "nsga2_multi_obj",
+      "display_name": "NSGA-II多目标优化",
+      "task_type": "optimization",
+      "keywords": ["NSGA-II", "NSGA2", "多目标优化", "Pareto前沿", "pymoo"],
+      "file_path": "resources/04_代码模板/Python/optimization/nsga2_multi_obj.py",
+      "function_name": "main",
+      "imports": ["numpy", "pymoo.algorithms.moo.nsga2", "pymoo.optimize"],
+      "pip_packages": ["pymoo"]
+    },
+    {
+      "id": "cvar_robust",
+      "display_name": "CVaR鲁棒优化",
+      "task_type": "optimization",
+      "keywords": ["CVaR", "条件风险价值", "鲁棒优化", "风险优化"],
+      "file_path": "resources/04_代码模板/Python/optimization/cvar_robust.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.optimize"],
+      "pip_packages": []
+    },
+    {
+      "id": "system_dynamics",
+      "display_name": "系统动力学",
+      "task_type": "optimization",
+      "keywords": ["系统动力学", "SD", "system dynamics", "存量流量"],
+      "file_path": "resources/04_代码模板/Python/optimization/system_dynamics.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.integrate"],
+      "pip_packages": []
+    },
+    {
+      "id": "sa_geodesic",
+      "display_name": "模拟退火+大地距离",
+      "task_type": "optimization",
+      "keywords": ["模拟退火", "大地距离", "SA", "geodesic", "退火优化"],
+      "file_path": "resources/04_代码模板/Python/optimization/sa_geodesic.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.optimize"],
+      "pip_packages": []
+    },
+    {
+      "id": "mk_mutation_test",
+      "display_name": "MK突变检验",
+      "task_type": "statistical",
+      "keywords": ["MK突变", "Mann-Kendall", "突变检验", "MK检验", "趋势突变"],
+      "file_path": "resources/04_代码模板/Python/statistical/mk_mutation_test.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.stats"],
+      "pip_packages": []
+    },
+    {
+      "id": "bayesian_network",
+      "display_name": "贝叶斯网络",
+      "task_type": "statistical",
+      "keywords": ["贝叶斯网络", "贝叶斯", "Bayesian network", "概率图模型"],
+      "file_path": "resources/04_代码模板/Python/statistical/bayesian_network.py",
+      "function_name": "main",
+      "imports": ["numpy", "pgmpy.models", "pgmpy.estimators"],
+      "pip_packages": ["pgmpy"]
+    },
+    {
+      "id": "lof_from_scratch",
+      "display_name": "LOF异常检测",
+      "task_type": "statistical",
+      "keywords": ["LOF", "局部离群因子", "异常检测", "local outlier factor"],
+      "file_path": "resources/04_代码模板/Python/statistical/lof_from_scratch.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.spatial.distance"],
+      "pip_packages": []
+    },
+    {
+      "id": "gmm_em",
+      "display_name": "GMM+EM算法",
+      "task_type": "statistical",
+      "keywords": ["GMM", "EM算法", "高斯混合模型", "期望最大化", "GMM+EM"],
+      "file_path": "resources/04_代码模板/Python/statistical/gmm_em.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.stats"],
+      "pip_packages": []
+    },
+    {
+      "id": "mcmc_gibbs",
+      "display_name": "MCMC Gibbs采样",
+      "task_type": "statistical",
+      "keywords": ["MCMC", "Gibbs采样", "Gibbs", "马尔可夫链蒙特卡洛"],
+      "file_path": "resources/04_代码模板/Python/statistical/mcmc_gibbs.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.stats"],
+      "pip_packages": []
+    },
+    {
+      "id": "mcmc_metropolis_hastings",
+      "display_name": "MCMC Metropolis-Hastings",
+      "task_type": "statistical",
+      "keywords": ["MCMC", "Metropolis-Hastings", "MH采样", "马尔可夫链蒙特卡洛"],
+      "file_path": "resources/04_代码模板/Python/statistical/mcmc_metropolis_hastings.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.stats"],
+      "pip_packages": []
+    },
+    {
+      "id": "food_web_ode",
+      "display_name": "食物链ODE",
+      "task_type": "simulation",
+      "keywords": ["食物链", "ODE", "食物网", "捕食模型", "Lotka-Volterra"],
+      "file_path": "resources/04_代码模板/Python/simulation/food_web_ode.py",
+      "function_name": "main",
+      "imports": ["numpy", "scipy.integrate"],
+      "pip_packages": []
+    },
+    {
+      "id": "wavelet_analysis",
+      "display_name": "小波分析",
+      "task_type": "signal",
+      "keywords": ["小波分析", "小波变换", "wavelet", "信号分解", "时频分析"],
+      "file_path": "resources/04_代码模板/Python/signal/wavelet_analysis.py",
+      "function_name": "main",
+      "imports": ["numpy", "pywt"],
+      "pip_packages": ["PyWavelets"]
+    },
+    {
+      "id": "bpnn_from_scratch",
+      "display_name": "BP神经网络从零实现",
+      "task_type": "ml",
+      "keywords": ["BP神经网络", "从零实现", "手写神经网络", "反向传播", "BPNN"],
+      "file_path": "resources/04_代码模板/Python/ml/bpnn_from_scratch.py",
+      "function_name": "main",
+      "imports": ["numpy"],
+      "pip_packages": []
+    }
+  ]
+}

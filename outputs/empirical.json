@@ -1,0 +1,83 @@
+{
+  "version": "2.0-merged",
+  "_doc": "v2.0 合并自本项目 v1.0 + handsomeZR/mathmodel-skill observational_v1（2026-07-22 融合）。dims 与 by_topic 采用 mathmodel-skill 的可溯源观测分位（59/91 可提取样本），结构/题型分布/评分参考保留本项目独有内容。仅用于异常提示与质量锚定，不是官方阈值或获奖预测。",
+  "_merge_sources": {
+    "rigorous_data": "handsomeZR-netizen/mathmodel-skill@v6.1 competitions/cumcm/empirical.json (observational_v1, baker=ingest_papers.py)",
+    "domain_curated": "本项目 v1.0 outputs/empirical.json (structure_patterns / topic_type_distribution / scoring_reference)"
+  },
+
+  "data_source": {
+    "competition": "CUMCM",
+    "years": "2023-2025",
+    "paper_count": 91,
+    "papers_extracted": 59,
+    "award_levels": ["国家一等奖", "国家二等奖"],
+    "extraction_method": "ingest_papers.py 自动提取 + 人工校验",
+    "baked_at": "2026-05-05",
+    "status": "observational_v1"
+  },
+
+  "dims": {
+    "doc_chars_total":      {"p25": 18684, "p50": 22961, "p75": 27147, "min": 12480, "max": 75915, "mean": 24474.3, "unit": "char", "desc": "全文总字符（含标点）"},
+    "doc_chars_zh":         {"p25": 15081, "p50": 19835, "p75": 24836, "min": 10535, "max": 73842, "mean": 21673.8, "unit": "char", "desc": "全文中文字符"},
+    "main_section_count":   {"p25": 2,     "p50": 5,     "p75": 8,     "min": 0,     "max": 310,   "mean": 19.3,    "unit": "count", "desc": "一级标题数"},
+    "sub_section_count":    {"p25": 20,    "p50": 28,    "p75": 40,    "min": 0,     "max": 74,    "mean": 30.3,    "unit": "count", "desc": "子标题数"},
+    "figure_count":         {"p25": 5,     "p50": 8,     "p75": 20,    "min": 2,     "max": 66,    "mean": 14.7,    "unit": "count", "desc": "图表数量"},
+    "table_count":          {"p25": 4,     "p50": 6,     "p75": 9,     "min": 1,     "max": 67,    "mean": 9.0,     "unit": "count", "desc": "表格数量"},
+    "formula_count":        {"p25": 12,    "p50": 24,    "p75": 67,    "min": 3,     "max": 177,   "mean": 43.2,    "unit": "count", "desc": "公式数量"},
+    "abstract_chars":       {"p25": 748,   "p50": 992,   "p75": 1146,  "min": 65,    "max": 1275,  "mean": 908.0,   "unit": "char", "desc": "摘要字符数"},
+    "abstract_5seg_anchor": {"p25": 2,     "p50": 3,     "p75": 4,     "min": 0,     "max": 5,     "mean": 2.8,     "unit": "count", "desc": "摘要五段锚点命中数"},
+    "keyword_count":        {"p25": 1,     "p50": 1,     "p75": 3,     "min": 0,     "max": 8,     "mean": 2.0,     "unit": "count", "desc": "关键词数"},
+    "reference_count":      {"p25": 16,    "p50": 28,    "p75": 63,    "min": 5,     "max": 121,   "mean": 38.5,    "unit": "count", "desc": "参考文献数（提取可能含重复引用）"}
+  },
+
+  "by_topic": {
+    "_doc": "分题型分位——本字段是 v1.0 的关键缺口。图表/公式需求因题型差异极大：C 题图表 p50=20 而 A 题 p50=8，全局 target 会误导。",
+    "A": {"label": "优化/规划类", "doc_chars_zh": {"p25": 14729, "p50": 16758, "p75": 20604}, "main_section_count": {"p25": 3, "p50": 5, "p75": 7}, "figure_count": {"p25": 5, "p50": 8, "p75": 9},  "table_count": {"p25": 2, "p50": 4, "p75": 4},  "formula_count": {"p25": 7,  "p50": 11, "p75": 67}},
+    "B": {"label": "评价/决策类", "doc_chars_zh": {"p25": 11163, "p50": 13787, "p75": 14950}, "main_section_count": {"p25": 1, "p50": 3, "p75": 6}, "figure_count": {"p25": 5, "p50": 6, "p75": 7},  "table_count": {"p25": 4, "p50": 6, "p75": 7},  "formula_count": {"p25": 15, "p50": 86, "p75": 122}},
+    "C": {"label": "数据/分析类", "doc_chars_zh": {"p25": 18504, "p50": 22697, "p75": 26220}, "main_section_count": {"p25": 1, "p50": 4, "p75": 8}, "figure_count": {"p25": 5, "p50": 20,"p75": 29}, "table_count": {"p25": 4, "p50": 9, "p75": 23}, "formula_count": {"p25": 20, "p50": 36, "p75": 44}},
+    "D": {"label": "工程/机理类", "doc_chars_zh": {"p25": 24410, "p50": 27086, "p75": 27370}, "main_section_count": {"p25": 6, "p50": 7, "p75": 9}, "figure_count": {"p25": 5, "p50": 8, "p75": 14}, "table_count": {"p25": 5, "p50": 6, "p75": 23}, "formula_count": {"p25": 12, "p50": 59, "p75": 69}},
+    "E": {"label": "开放/综合类", "doc_chars_zh": {"p25": 18460, "p50": 24836, "p75": 31591}, "main_section_count": {"p25": 3, "p50": 5, "p75": 9}, "figure_count": {"p25": 6, "p50": 13,"p75": 22}, "table_count": {"p25": 5, "p50": 6, "p75": 9},  "formula_count": {"p25": 10, "p50": 14, "p75": 24}},
+    "F": {"label": "政策/管理类", "doc_chars_zh": {"p25": 15081, "p50": 17490, "p75": 22265}, "main_section_count": {"p25": 3, "p50": 5, "p75": 9}, "figure_count": {"p25": 6, "p50": 12,"p75": 22}, "table_count": {"p25": 4, "p50": 5, "p75": 6},  "formula_count": {"p25": 20, "p50": 36, "p75": 46}}
+  },
+
+  "quality_signals": {
+    "abstract_quantitative_ratio": 0.627,
+    "abstract_5seg_full_hit_ratio": 0.271,
+    "abstract_5seg_partial_hit_ratio": 0.729,
+    "_note": "仅描述解析器命中率。定量结果应可追溯；anchor 数与奖项无确定关系。"
+  },
+
+  "structure_patterns": {
+    "typical_sections": [
+      "摘要", "问题重述", "问题分析", "模型假设", "符号说明",
+      "模型建立与求解", "模型检验", "灵敏度分析", "模型评价与推广", "参考文献", "附录"
+    ],
+    "common_subsections_per_problem": ["问题分析", "模型准备", "模型建立", "模型求解", "结果分析"]
+  },
+
+  "topic_type_distribution": {
+    "_doc": "本项目 v1.0 独有——按建模方法分类的任务分布，配合 method_matching.md 使用。",
+    "评价类": {"percentage": 35, "common_models": ["TOPSIS", "AHP", "熵权法", "模糊综合评价", "灰色关联"], "typical_indicators": ["综合得分", "排名", "权重"]},
+    "预测类": {"percentage": 25, "common_models": ["ARIMA", "LSTM", "灰色预测", "回归分析", "神经网络"], "typical_indicators": ["RMSE", "MAE", "R²", "MAPE"]},
+    "优化类": {"percentage": 25, "common_models": ["线性规划", "整数规划", "遗传算法", "粒子群优化", "模拟退火"], "typical_indicators": ["目标函数值", "约束满足率", "收敛代数"]},
+    "分类聚类": {"percentage": 10, "common_models": ["K-means", "DBSCAN", "随机森林", "SVM", "决策树"], "typical_indicators": ["准确率", "F1值", "轮廓系数"]},
+    "其他": {"percentage": 5, "common_models": ["图论", "排队论", "微分方程", "马尔可夫"], "typical_indicators": ["视具体问题而定"]}
+  },
+
+  "scoring_reference": {
+    "_doc": "本项目 v1.0 独有——分档定性参考，辅助 paper-reviewer agent 判等。与 dims/by_topic 的定量分位正交：定量作异常提示，定性作整体判等。",
+    "excellent": {"score_range": "85-100", "characteristics": ["问题分析深入，假设合理", "模型选择有充分依据", "求解过程完整，代码可运行", "灵敏度分析充分", "图表清晰，分析到位", "结论有数据支撑", "论文结构完整，表达规范"]},
+    "good":      {"score_range": "70-84",  "characteristics": ["问题分析基本完整", "模型选择基本合理", "求解过程基本完整", "有灵敏度分析但不够充分", "图表基本清晰", "结论基本有据"]},
+    "average":   {"score_range": "60-69",  "characteristics": ["问题分析较浅", "模型选择依据不足", "求解过程有遗漏", "灵敏度分析不足", "图表质量一般", "结论较为空洞"]},
+    "poor":      {"score_range": "0-59",   "characteristics": ["问题分析错误或缺失", "模型选择不当", "求解过程不完整", "无灵敏度分析", "图表质量差", "结论无依据"]}
+  },
+
+  "usage_notes": [
+    "本数据基于 2023-2025 年国赛 91 份来源文档，其中 59 份成功文本提取进入观测分位；仅作异常提示与质量锚点，非硬性标准。",
+    "按题型差异显著：查图表/字数分位时优先用 by_topic[题型]，全局 dims 仅在题型未定时使用。",
+    "字数、公式数、图表数、引用数不是官方硬阈值，不替代题目要求、内容完整性或人工判断。",
+    "不同题型指标分布差异大，实际评分须结合具体赛题要求与 dim_weights.json 的题型加权。",
+    "reference_count 提取可能统计重复引用，不等于条目数；abstract_5seg_anchor 与奖项无确定关系。"
+  ]
+}
