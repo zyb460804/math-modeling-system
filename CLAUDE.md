@@ -12,6 +12,54 @@
 
 ---
 
+## 开发命令（给改系统本身的人）
+
+> 使用数学建模功能见下方「项目定位」起的内容；本节面向**修改本系统代码/文档**的开发场景。
+
+### 安装依赖
+
+```bash
+./setup.ps1                # Windows：核心 + 交互式可选 + npm + 外部软件检查
+./setup.sh --core          # macOS/Linux/Git Bash：只装核心
+pip install -r docs/requirements-optional.txt   # v4.3 工具链（图表/PDF/SHAP/Optuna/akshare）
+```
+
+### 改完代码后的验证（每次修改 .py 后跑）
+
+```bash
+# 1. 编译扫描（应 0 失败；当前 130+ .py）
+find .claude/skills tools outputs/scripts -name '*.py' -not -path '*/node_modules/*' -exec python -m py_compile {} +
+
+# 2. --help 冒烟（关键门禁脚本，--help 不应触发主逻辑写报告）
+python .claude/skills/math-figure/scripts/render_check.py --help
+python .claude/skills/quality-assurance-auditor/scripts/evidence_gate.py --help
+python .claude/skills/quality-assurance-auditor/scripts/pipeline.py --help
+
+# 3. QA 门禁脚本换题注意：读 paper_output/plan/qa_config.json，缺配置显式 SKIP
+#    schema 示例：.claude/skills/quality-assurance-auditor/references/qa_config.example.json
+```
+
+### RAG（award-paper-rag）语料链路
+
+```bash
+cd .claude/skills/award-paper-rag
+python -m scripts.mmqa split --out-text-nodes-jsonl data/nodes/text_nodes.block.jsonl  # 再生成（改 papers.csv 后）
+# 验证三者一致：papers.csv 行数 == md 语料数 == jsonl 节点数 == 6863
+```
+
+### Git 流程（仓库已发布到 GitHub）
+
+```bash
+git add -A && git commit -m "<type>: <描述>"   # type: feat/fix/docs/refactor
+git push                                       # 远程已设 origin/main，无需加参数
+```
+
+### 测试现状
+
+本系统**无 pytest 测试套件**——质量保障靠门禁脚本（evidence_gate / pipeline / render_check / consistency-auditor / completeness-auditor）在真实赛题流水线中验证。改门禁脚本后，用 `--help` + 临时合成数据冒烟即可。
+
+---
+
 ## 项目定位
 
 数学建模竞赛生产系统。Claude 在此项目中同时扮演：
