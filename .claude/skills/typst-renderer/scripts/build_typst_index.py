@@ -6,6 +6,13 @@
 """
 import os, sys, json, re
 
+# Windows GBK 控制台兼容：强制 stdout/stderr 走 utf-8，避免中文乱码
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 # 赛事识别关键词 → 标准 competition key
 COMPETITION_MAP = {
     "cumcm": "CUMCM 国赛",
@@ -37,14 +44,16 @@ def scan_template_set(set_dir):
     return info
 
 def main():
-    root = "e:/数学建模/resources/15_Typst模板"
-    out = "e:/数学建模/resources/15_Typst模板/typst_index.json"
-    args = sys.argv[1:]
-    for i, a in enumerate(args):
-        if a == "--root" and i + 1 < len(args):
-            root = args[i + 1]
-        if a == "--out" and i + 1 < len(args):
-            out = args[i + 1]
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="扫描 resources/15_Typst模板/ 生成 typst_index.json。"
+    )
+    parser.add_argument("--root", default="e:/数学建模/resources/15_Typst模板", help="模板根目录")
+    parser.add_argument("--out", default="e:/数学建模/resources/15_Typst模板/typst_index.json", help="输出 JSON 路径")
+    args = parser.parse_args()
+    root = args.root
+    out = args.out
 
     index = {"templates": {}, "stats": {}}
     typ_count = tex_count = 0

@@ -492,4 +492,19 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    configure_utf8_stdio()
+    import argparse
+    import os as _os
+
+    parser = argparse.ArgumentParser(
+        description="预检脚本：检查 problem_files/ 输入资产健康（正式流程 S0 启动门）。"
+    )
+    parser.add_argument(
+        "--root",
+        default=None,
+        help="项目根目录（默认：当前工作目录）",
+    )
+    args = parser.parse_args()
+    if args.root:
+        _os.chdir(args.root)
     raise SystemExit(main())

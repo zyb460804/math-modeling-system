@@ -7,6 +7,11 @@ import shutil
 import sys
 from pathlib import Path
 
+# 离线优先：必须在 huggingface_hub import 之前设置（它 import 时缓存常量，
+# 运行时 setdefault 无效），否则网络受限环境会因联网检查挂起。
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
 # Windows GBK 控制台兼容：强制 stdout/stderr 走 utf-8，避免数学符号/中文崩溃
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
@@ -16,7 +21,7 @@ except Exception:
 
 from dotenv import load_dotenv
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Load .env from project root
 load_dotenv(dotenv_path=PROJECT_ROOT / ".env", override=False)
@@ -107,6 +112,9 @@ def _init_models() -> None:
         model_name = _get_env(
             "HF_EMBED_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
         )  # 384 维，中英混合语料；换模型需重建索引
+        # 离线优先：模型已本地缓存，禁止联网检查 HuggingFace Hub（网络受限时联网检查会挂起）
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
         print(f"[rag] 无 API key → 离线模式，本地 embedding: {model_name}", file=sys.stderr)
         Settings.embed_model = HuggingFaceEmbedding(model_name=model_name)
         Settings.llm = None  # build 不需要 LLM；chat 命令会提示需配 LLM

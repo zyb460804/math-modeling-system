@@ -77,11 +77,13 @@ def check_text_file(path: Path, failures: list[str]) -> None:
 
 def question_ids(model_route: Any) -> list[str]:
     questions = model_route.get("questions") if isinstance(model_route, dict) else []
+    if not questions and isinstance(model_route, dict):
+        questions = model_route.get("routes") or []
     result: list[str] = []
     if isinstance(questions, list):
         for item in questions:
             if isinstance(item, dict):
-                qid = str(item.get("question_id") or item.get("id") or "").strip()
+                qid = str(item.get("question_id") or item.get("id") or item.get("qid") or "").strip()
                 if qid:
                     result.append(qid)
     return sorted(set(result))
@@ -150,7 +152,7 @@ def check_s5() -> dict[str, Any]:
     table_index = check_json_file(OUTPUT_DIR / "tables" / "table_index.json", failures)
 
     for item in _items(model_results, "questions"):
-        qid = str(item.get("question_id") or "UNKNOWN")
+        qid = str(item.get("question_id") or item.get("qid") or "UNKNOWN")
         state = status_of(item)
         if state in BAD_RESULT_STATUSES:
             failures.append(f"{qid}: model_results 状态仍不是正式结果：{state or 'missing'}")

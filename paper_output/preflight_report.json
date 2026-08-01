@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "generated_by": "paper-workflow-orchestrator/scripts/preflight_check.py",
-  "generated_at": "2026-07-25T20:55:10",
+  "generated_at": "2026-08-01T00:39:56",
   "status": "PASS",
   "root": "E:/数学建模",
   "problem_files": {
