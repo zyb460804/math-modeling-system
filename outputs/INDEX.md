@@ -332,6 +332,9 @@
 |------|------|----------|
 | `final_quality_gate.md` | **主入口**：P0阻断项终检清单 | 提交前 |
 | `final_quality_gate_workflow.md` | **终检流程**：论文→代码→图表→PPT全链路检查 | 提交前 |
+| `tools/quality_gate/final_gate_runner.py` | **一键终检总门（v4.5）**：G4.7 实物门+G4.6 自证门+G5 证据门+G4.8 数字一致性+G4.9 公式核验；`--paper-dir` 支持任意作品目录 | 提交前 |
+| `tools/quality_gate/paper_artifact_check.py` | **G4.7 实物门（v4.5）**：docx 表格实体/图片/占位符、result*.xlsx 数据区非空、代码存在性 | 提交前 |
+| `paper_output/plan/formula_verification.md` | **G4.9 公式核验记录（v4.5）**：真题核心公式与官方参考答案核对结果 | 建模时 |
 | `validation_checklist.md` | **检验清单**：模型检验/误差/稳健性 | 补检验 |
 | `reproducibility_checklist.md` | **复现清单**：代码复现核对 | 提交前 |
 | `sensitivity_and_robustness_templates.md` | **灵敏度/稳健性模板** | 写检验 |

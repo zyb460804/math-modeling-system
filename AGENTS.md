@@ -725,12 +725,17 @@
 
 任何 P0 阻断项未通过时，不得宣称”可提交、可答辩、可复现”。终检必须覆盖论文、代码、图表、表格、PPT、AI 使用说明、匿名要求和关键数字追溯。
 
-**数字一致性门禁（v3.5 新增）**：论文中的关键数字必须与代码实际输出一致。使用以下脚本检查：
+**数字一致性门禁（v3.5 新增 / v4.5 升级）**：论文中的关键数字必须与代码实际输出一致。**v4.5 起任何最终稿必须运行一键终检总门，且全部 PASS 才可宣称可提交**：
+```
+python tools/quality_gate/final_gate_runner.py --paper-dir <作品目录> --workdir E:/数学建模
+```
+总门包含 5 道客观门：G4.7 实物门（docx 表格实体/图片/占位符、result*.xlsx 数据区非空、代码存在性）、G4.6 代码自证门（有代码必须配 verify_*.py）、G5 证据门、G4.8 数字一致性（论文数字 vs 结果文件，结果文件缺失即 FAIL）、G4.9 公式核验门（真题必须落盘 formula_verification.md）。以下脚本仍可用（注意 `check_number_consistency.py` 为单题定制，换题必须改用 G4.8 通用核对）：
 - `check_parameter_consistency.py`：检查代码参数是否与题目要求一致（如36吨 vs 72吨）
 - `check_result_reasonableness.py`：检查代码输出的结果是否在合理范围内
-- `check_number_consistency.py`：检查论文中的关键数字是否与代码输出一致
+- `check_number_consistency.py`：检查论文中的关键数字是否与代码输出一致（单题定制，需按题重配或改用 G4.8）
 
 任何不一致项超过容差（绝对值5%、百分比10个百分点、成本15%）时，不得把 Word 称为最终稿。
+**实物门（v4.5 新增）**：题面要求的结果文件（如 result1.xlsx）必须真实写入数据（纯表头判为空）；正文结果表/符号表必须是 docx 真实表格实体，不得用文字占位。作品文件必须统一放在 `paper_output/`（或提交前对实际目录跑 `final_gate_runner.py --paper-dir <目录>`），防止门禁因目录漂移落空。
 
 **结果自动注入（v3.5 新增）**：使用 `inject_results_to_paper.py` 将代码运行结果自动注入到论文中，确保数字一致。
 

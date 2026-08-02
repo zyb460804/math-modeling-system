@@ -84,6 +84,20 @@ git push                                       # 远程已设 origin/main，无�
 
 触发词：`开始生成` `跑一下这个题` `生成数学建模论文` `分析赛题` `使用 MathModel Skill`
 
+### Agent 工作规范（HARD RULE，不可跳过）
+
+> **完整规范见 `docs/agent_workflow_standard.md`**。以下为核心铁律：
+
+1. **门禁通过 ≠ 质量达标**：门禁是底线，交付标准是"调完全部相关 skill + 知识沉淀"。
+2. **个人能力用在 skill 没覆盖的地方**（如几何推导）；skill 覆盖的部分（选模/写作/降 AI 味/评审/答辩）**必须调用 skill**。
+3. **禁止用"手工替换"代替 skill**（如手工去 AI 味 vs `humanizer-zh-academic` skill 的 14 种 AI 模式 + 60 分制评分）。
+4. **禁止用"自评"代替"独立评审"**（如手工 7 维度 vs `/review` 或 `paper-reviewer` agent）。
+5. **禁止凭"对题目的熟悉度"跳过选模查阅**——必须先查 `outputs/INDEX.md` + `method_matching.md` + `model-selection-matrix.md`。
+6. **写作时必须对照** `phrase_bank.md` + `scoring_rubric.md` + `section-architecture.md`（不是"可选"）。
+7. **论文写完必须调 `/defense`** 生成答辩材料（不能只交论文）。
+
+违反以上规则，用户有权要求 Agent 重做相应阶段。详细禁止行为清单与执行顺序见 `docs/agent_workflow_standard.md`。
+
 ### 触发词统一入口（v3.4）
 
 > **核心原则：同一意图 → 默认最深输出。** 用户不需要知道"加什么词"才能拿到完整结果。

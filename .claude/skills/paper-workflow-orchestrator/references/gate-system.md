@@ -22,6 +22,12 @@ G4.5 RESULTS_JUDGED_BY_HUMAN [人类决策门]
   ↓
 G4.6 RESULTS_SELF_VERIFIED [工程纪律门, v4.2]
   ↓
+G4.7 ARTIFACT_GATE [实物门, v4.5]
+  ↓
+G4.8 NUMBER_CONSISTENCY [数字一致性客观核对, v4.5]
+  ↓
+G4.9 FORMULA_VERIFICATION [公式核验门, v4.5]
+  ↓
 G4 RESULTS_FROZEN [承重墙]
   ↓
 G5 PAPER_SECTION_READY
@@ -286,6 +292,36 @@ evidence_refs:
 **是** — G4.6 失败阻断结果冻结。`freeze_allowed_Qx = G3 ∧ G4.5 ∧ G4.6`。
 
 ---
+
+## G4.7: ARTIFACT_GATE（实物门，v4.5）
+
+**守卫目标**：检查最终交付物实物（docx/xlsx/代码），防止"占位符论文/空结果文件/无代码"带病交付。
+
+> **背景**：2026-08 实测 B 题作品 final_paper.docx 表格实体为 0、result1/result2.xlsx 只有表头、无代码文件，原证据门只查 JSON 索引全部 PASS。教训：**索引存在 ≠ 实物合格**。
+
+| 检查项 | 通过标准 | 工具 |
+|---|---|---|
+| 论文 docx | 存在且表格实体 ≥ 1，题面结果表/符号表为真实表格 | `tools/quality_gate/paper_artifact_check.py --paper-dir <目录>` |
+| 占位残留 | 无【待补】/TODO/**表X 占位/**如下表所示：** | 同上 |
+| 结果 xlsx | result*.xlsx 排除表头后数据区非空 | 同上 |
+| 代码存在 | 目录内有 .py/.m/.R（否则不可复现） | 同上 |
+| 目录受控 | 作品必须在 paper_output/ 或显式登记为目录漂移(P1) | runner 登记 |
+
+**失败回退**：补表格实体 → 运行代码生成结果文件 → 重跑 G4.7。
+
+## G4.8: NUMBER_CONSISTENCY（数字一致性客观核对，v4.5）
+
+- 原 `check_number_consistency.py` 为单题定制（A 题指标写死），换题失效。升级为**通用模式**：从论文提取全部数字 ↔ 作品目录 results/*.json|*.csv 数字集合比对。
+- **结果文件缺失 = FAIL（P0）**；命中"论文数字无结果来源"进入 warning 人工复核。
+- 失败回退：补结果文件/修正论文数字 → 重跑。
+
+## G4.9: FORMULA_VERIFICATION（公式核验门，v4.5）
+
+**守卫目标**：真题核心公式必须与官方参考答案/权威解法核对，防止编造修正系数与经验公式（实测 Q2 k=0.3 凭空设定）。
+
+- 通过条件：`paper_output/plan/formula_verification.md` 存在，覆盖每个核心公式（论文用式/官方式/差异/来源/结论），无【待核验】残留。
+- 非真题：文件中说明检索过程与理由，人工确认放行。
+- 失败回退：回退到 analyze/审题选模，补齐官方公式核对后重跑。
 
 ## G4: RESULTS_FROZEN（结果已冻结）
 

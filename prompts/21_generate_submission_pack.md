@@ -5,6 +5,14 @@
 > - 后续触发：`22_case_feedback_loop.md`（经验回灌）
 > - 输出：10 项提交清单 + 文件打包方案 + 答辩准备清单
 
+> **v4.5 强制前置（2026-08 新增）**：生成提交包前，必须先运行一键终检总门并确认全部 PASS：
+>
+> ```
+> python tools/quality_gate/final_gate_runner.py --paper-dir <作品目录> --workdir E:/数学建模
+> ```
+>
+> 若终检 ❌ FAIL，本 prompt 的输出第一项必须改为"终检未通过原因 + 阻断项清单"，**禁止生成"可提交"结论**；修复并重跑至 ✅ 后才生成提交包。提交包中必须包含 `qa/final_gate_report.json` 终检报告与公式核验记录 `paper_output/plan/formula_verification.md`（真题）。
+
 请基于当前数学建模题目、已有论文内容、代码材料、图片材料，以及 outputs/ 中已经沉淀的规则库，生成一套**可提交、可答辩、可复现**的完整提交包方案。
 
 注意：

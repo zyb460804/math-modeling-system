@@ -27,6 +27,14 @@ paper_output/final_paper*
 paper_output/research/port_backup_*/
 paper_output/research/sources/
 paper_output/research/sources_extra/
+# 根目录赛题临时产物（脚本生成，非骨架）：preflight/figure/table/tasks 索引、格式检查报告、PDF 抽取文本
+paper_output/preflight_report.json
+paper_output/figure_index.json
+paper_output/table_index.json
+paper_output/tasks.json
+paper_output/format_check_report.json
+paper_output/format_check_report.md
+paper_output/_pdf_text.txt
 
 # ---------- 本机配置（含绝对路径）----------
 .claude/settings.local.json

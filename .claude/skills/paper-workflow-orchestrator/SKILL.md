@@ -19,6 +19,37 @@ python .claude/skills/paper-workflow-orchestrator/scripts/preflight_check.py
 - 不允许跳过预检；不允许"先凑合写一稿"；不允许凭印象判断附件状态；
 - 预检通过后，按下方阶段路由表逐步推进。
 
+## 知识资产强制查阅门（v4.8 新增·HARD RULE）
+
+> **背景**：2026-08 实测发现 Agent 凭任务熟悉度跳过知识沉淀走捷径，论文自评仅 84 分（低于系统设计上限 90+）。此门强制查阅，**不可跳过**。完整规范见 `docs/agent_workflow_standard.md`。
+
+预检通过后、进入任何建模/写作之前，**必须**完成以下查阅（每项读后内化于心，不要求逐字复述）：
+
+| # | 必查资产 | 路径 | 用途 |
+|---|---------|------|------|
+| 1 | 知识索引 | `outputs/INDEX.md` | 定位本题型相关的全部知识资产 |
+| 2 | 方法匹配表 | `outputs/method_matching.md` | 11类任务×模型×算法×风险对照，确认选模对齐 |
+| 3 | 选型矩阵 | `.claude/skills/model-selector/references/model-selection-matrix.md` | 95+ 场景直查 |
+| 4 | HMML 方法库 | `.claude/skills/model-selector/references/hmml/`（若有） | 分层方法检索 |
+| 5 | 评分量表 | `outputs/scoring_rubric.md` | 7维度100分制，写作时对齐 |
+| 6 | 写作模板 | `outputs/writing_templates.md` + `outputs/phrase_bank.md` | 国赛高频句式与填空式模板 |
+| 7 | 章节架构 | `.claude/skills/paper-formal-writer/references/section-architecture.md` | 摘要6要素/引言5要素/结果证据阶梯 |
+| 8 | 代码模板 | `resources/04_代码模板/` + `resources/10_算法cookbook/` | 复用竞赛验证过的实现 |
+| 9 | 实测分位 | `outputs/empirical.json` + `outputs/dim_weights.json` | 图表/公式数量分位 + 题型加权 |
+
+**禁止行为**（违反任一项用户有权要求重做）：
+- ❌ 凭"对题目的熟悉度"跳过本查阅门
+- ❌ 用"手工替换"代替 skill 调用（如手工去 AI 味 vs `humanizer-zh-academic`）
+- ❌ 用"自评"代替"独立评审"（如手工 7 维度 vs `/review` agent）
+- ❌ 论文写完不调 `/defense` 答辩材料
+- ❌ 把"门禁通过"等同于"质量达标"
+
+**交付前必须调用的 skill**（缺一不可）：
+1. `humanizer-zh-academic`（降 AI 味，段落级 + 60 分制评分）
+2. `/review` 或 `paper-reviewer` agent（独立 9 维度评审）
+3. `/defense`（10 类问答 + 30 条追问链）
+4. （冲奖模式）`blind-panel`（3 座独立盲评）
+
 ## 状态门（每阶段开始前执行）
 
 正式流程进入 S1-S8 任一阶段前，必须用 `workflow_guard.py` 检查截至当前阶段的产物状态。例如进入数据阶段前检查到 S2：
@@ -169,6 +200,10 @@ python .claude/skills/paper-workflow-orchestrator/scripts/workflow_guard.py --st
 | **图表要期刊风**（IEEE/Nature） | `math-figure` 的 `journal_style.py`（SciencePlots，v4.3） |
 | **降 AIGC 要保留 Word 排版** | `aigc-reduce` 的 `replace_docx_preserve_format.py`（v4.3） |
 | **代码自证门 G4.6** | `model-code-and-result-generator` 的 `verification_template.py` + `qa-auditor` 的 `verify_gate.py`（v4.2） |
+| **实物门 G4.7** | `tools/quality_gate/paper_artifact_check.py`（docx 表格实体/图片/占位符、result*.xlsx 数据区非空、代码存在性；支持任意 --paper-dir，v4.5） |
+| **数字一致性门 G4.8** | `tools/quality_gate/final_gate_runner.py` 内置通用核对（论文数字 vs results/*.json，结果文件缺失即 FAIL，v4.5） |
+| **公式核验门 G4.9** | `paper_output/plan/formula_verification.md`（真题必须官方参考答案核对，防编造修正系数，v4.5） |
+| **图片嵌入门 G4.10** | `tools/quality_gate/image_embed_check.py`（Markdown `![](path)` 语法数 vs Word `word/media/*` 实际内嵌图数；防"见图N"纯文字漏检，v4.7） |
 | **流水线状态/返工/并行** | `qa-auditor` 的 `pipeline_manager.py`（GitOps 状态机，v4.2） |
 | **数值合理性（inf/nan/量级）** | `qa-auditor` 的 `check_numeric_sanity.py`（v4.2） |
 | **报告新鲜度校验** | `context-memory-keeper` 的 `freshness_check.py`（SHA-256，v4.2） |
@@ -180,7 +215,7 @@ python .claude/skills/paper-workflow-orchestrator/scripts/workflow_guard.py --st
 | **MATLAB 强项**（ODE/曲线拟合/优化/Simulink） | `matlab-model-code-generator` 的 `matlab_runner.py` + `matlab_templates/`（v4.3，无头 `matlab -batch`，本地 MATLAB 已接入） |
 | 方法选择完成，需要签发建模合同 | 读取 `references/model-contract-template.md` → 调用 `model-code-and-result-generator` |
 | 图表生成前，需要签发图表合同 | 读取 `references/figure-contract-template.md` → 调用 `data-cleaning-and-visualization` |
-| 进入新阶段，需要执行门控检查 | 读取 `references/gate-system.md` → 执行对应 G1-G6 门控 |
+| 进入新阶段，需要执行门控检查 | 读取 `references/gate-system.md` → 执行对应 G1-G6 门控；**提交前必须运行 `tools/quality_gate/final_gate_runner.py --paper-dir <作品目录>`，全部 PASS 才放行（v4.5）** |
 | 结果冻结，需要锁定数字 | 读取 `references/frozen-numbers-convention.md` → 生成 `frozen_numbers.json` |
 | 候选方法验证，需要 PoC 检查 | 读取 `references/poc-validation-gate.md` → 运行 PoC 验证 |
 | 三审计层全过、championship 冲奖终审 | `.claude/agents/blind-panel-judge.md`（3 座并行）→ `blind-panel` skill 聚合 |
