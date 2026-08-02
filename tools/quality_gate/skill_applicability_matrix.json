@@ -1,0 +1,249 @@
+{
+  "_meta": {
+    "version": "1.1",
+    "description": "Skill 适用性矩阵：按题型/交付方式/模式动态计算适用 skill 清单，避免'资产不用就浪费'。门禁覆盖率 = 已调适用 skill / 适用 skill 总数（分母是适用数，不是总数 54）。v1.1 变更：14 个 skill 归档（9 Nature + academic-paper-strategist/composer/defense-pptx + csv-data-summarizer + result-validator），方法论精华已抽取到 references/，新增 defense-ppt-builder-zh。",
+    "how_to_use": "skill_invocation_gate.py 读取 problem_analysis.json 的 task_type + delivery + mode，查本矩阵得适用清单，检查产出文件，输出真实覆盖率。"
+  },
+
+  "always_required": {
+    "_desc": "每题必用（9 个），不论题型/交付/模式。已在 G5.1-G5.9 门禁强制。",
+    "skills": [
+      "knowledge_checkpoint",
+      "model-selector",
+      "code_reuse_check",
+      "writing_alignment",
+      "humanizer-zh-academic",
+      "paper-reviewer",
+      "ai-failure-checker",
+      "citation-tracer",
+      "defense"
+    ]
+  },
+
+  "by_topic": {
+    "_desc": "按题型适用的 skill。task_type 从 problem_analysis.json 读取。一个题可同时属于多类（如'优化+数据驱动'）。",
+    "评价类": {
+      "signals": ["排序", "打分", "优选", "多指标", "综合评价"],
+      "skills": ["symbol-table-builder", "robustness-checker", "algorithm-benchmark"],
+      "cookbooks": ["cookbook-evaluation"],
+      "code_templates": ["resources/04_代码模板/Python/evaluation/"]
+    },
+    "预测类": {
+      "signals": ["预测", "趋势", "需求", "销量", "波动", "未来"],
+      "skills": ["feature-engineering", "algorithm-benchmark"],
+      "cookbooks": ["cookbook-ml", "cookbook-statistical"],
+      "code_templates": ["resources/04_代码模板/Python/prediction/"]
+    },
+    "优化类": {
+      "signals": ["最优", "最小", "最大", "调度", "配置", "路径", "规划"],
+      "skills": ["algorithm-benchmark"],
+      "cookbooks": ["cookbook-optimization"],
+      "code_templates": ["resources/04_代码模板/Python/optimization/"]
+    },
+    "统计分析类": {
+      "signals": ["影响因素", "关系", "显著性", "相关"],
+      "skills": ["feature-engineering"],
+      "cookbooks": ["cookbook-statistical"],
+      "code_templates": ["resources/04_代码模板/Python/statistical/"]
+    },
+    "机理分析类": {
+      "signals": ["物理", "传热", "传染", "系统演化", "微分方程"],
+      "skills": [],
+      "cookbooks": ["cookbook-mechanistic"],
+      "code_templates": ["resources/04_代码模板/Python/simulation/"]
+    },
+    "聚类分类类": {
+      "signals": ["分群", "识别", "鉴别", "标签", "聚类"],
+      "skills": ["feature-engineering", "algorithm-benchmark"],
+      "cookbooks": ["cookbook-clustering", "cookbook-ml"],
+      "code_templates": ["resources/04_代码模板/Python/ml/"]
+    },
+    "图与网络类": {
+      "signals": ["最短路", "连通", "选址", "网络结构", "图"],
+      "skills": ["network-graph"],
+      "cookbooks": ["cookbook-network"],
+      "code_templates": ["resources/04_代码模板/Python/"]
+    },
+    "数据驱动类": {
+      "signals": ["附件数据", "数据集", "栅格", "CSV", "Excel"],
+      "skills": ["data-cleaning-and-visualization", "authoritative-data-harvester"],
+      "cookbooks": [],
+      "code_templates": [],
+      "_note": "csv-data-summarizer 已整合为 data-cleaning-and-visualization 的 quick-eda 子能力（references/quick-eda-protocol.md）"
+    },
+    "多目标决策类": {
+      "signals": ["多目标", "帕累托", "权衡"],
+      "skills": ["algorithm-benchmark"],
+      "cookbooks": ["cookbook-game-theory", "cookbook-optimization"],
+      "code_templates": []
+    },
+    "几何解析类": {
+      "signals": ["几何", "剖面", "坐标", "三角", "射线", "投影"],
+      "skills": ["math-figure"],
+      "cookbooks": ["cookbook-mechanistic"],
+      "code_templates": []
+    }
+  },
+
+  "by_delivery": {
+    "_desc": "按交付方式适用的 skill。delivery 从 problem_analysis.json 或用户指定读取。",
+    "word": {
+      "skills": ["word-counter", "defense-ppt-builder-zh"],
+      "optional": ["docx-editor-cn（仅当需要改 Word XML/公式时）"]
+    },
+    "latex": {
+      "skills": ["latex-renderer", "defense-ppt-builder-zh"]
+    },
+    "typst": {
+      "skills": ["typst-renderer", "defense-ppt-builder-zh"]
+    },
+    "english_academic": {
+      "_desc": "美赛/英文论文适用。Nature skill 已归档，方法论精华在 references/ 下。",
+      "skills": [],
+      "references": [
+        "paper-formal-writer/references/english-academic-writing.md（美赛英文写作指南）",
+        "paper-formal-writer/references/ai-traffic-light.md（AI 边界红绿灯）",
+        "paper-formal-writer/references/common-phrases.md（中英双语短语库）"
+      ]
+    }
+  },
+
+  "by_mode": {
+    "_desc": "按运行模式（fast/standard/championship）额外启用的 skill",
+    "fast": {
+      "_desc": "fast 模式：只调 9 个必用，关闭建议类",
+      "extra_skills": []
+    },
+    "standard": {
+      "_desc": "standard 模式（默认）：必用 + 题型适用 + 通用建议",
+      "extra_skills": ["paper-polisher", "style-calibration", "award-paper-rag", "robustness-checker", "symbol-table-builder"]
+    },
+    "championship": {
+      "_desc": "championship 模式（冲奖）：全部适用 + 盲评 + 碰撞门",
+      "extra_skills": ["blind-panel", "figqa（math-figure/scripts/figqa.py）", "pdf_qa（math-figure/scripts/pdf_qa.sh）"]
+    }
+  },
+
+  "general_recommended": {
+    "_desc": "通用建议调（任何题都建议，WARN 级）",
+    "skills": [
+      "paper-polisher（12点检查+段落改写+60分制）",
+      "style-calibration（从用户过往作品学习风格）",
+      "award-paper-rag（O奖论文章节级检索+中英对照精读）",
+      "robustness-checker（稳健性/灵敏度检查）",
+      "symbol-table-builder（符号表自动构建）"
+    ]
+  },
+
+  "rarely_applicable": {
+    "_desc": "特殊场景才用的 skill，不调入覆盖率分母（避免假浪费）",
+    "skills": {
+      "matlab-model-code-generator": "仅 MATLAB 题目",
+      "matlab-code-reviewer": "仅 MATLAB 题目",
+      "matlab-runner": "仅 MATLAB 题目",
+      "scan": "Legacy，资料扫描（用户明确要求时）",
+      "card": "Legacy，知识卡片（用户明确要求时）",
+      "rules": "Legacy，建规则库（用户明确要求时）",
+      "git-snapshot": "版本快照（用户明确要求时）",
+      "algorithm-test": "代码测试（用户明确要求时）",
+      "algorithm-runner": "运行算法（与 code skill 互补）",
+      "paper-micro-unit-generator": "微单元（低能力模型兜底）",
+      "paper-rewriter": "段落改写（paper-polisher 内部调度）",
+      "diagram-maker": "流程图（figure 内部调度）",
+      "interactive-chart": "交互图表（figure 内部调度）",
+      "math-figure": "数学图表（figure 内部调度，几何类必用）",
+      "decision-logger": "决策记录（G2.5/G4.5 触发）",
+      "solution-package-builder": "提交包（最后一步）",
+      "context-memory-keeper": "记忆管理（各阶段触发）",
+      "feature-engineering": "特征工程（ML/预测题适用，已并入 by_topic）",
+      "data-cleaning-and-visualization": "数据清洗（数据驱动题适用，已并入 by_topic，含 quick-eda 子能力）",
+      "authoritative-data-harvester": "外部数据（数据驱动题适用，已并入 by_topic，含多源检索子能力）",
+      "aigc-reduce": "降 AI 味（备选，默认走 humanizer-zh-academic）",
+      "docx-editor-cn": "Word 原生公式/XML 编辑（按需）",
+      "typst-renderer": "Typst 渲染（替代 Word/LaTeX，按需）"
+    }
+  },
+
+  "archived_skills": {
+    "_desc": "v4.8 归档的 14 个 skill（移到 .claude/skills/_archive/）。方法论精华已抽取到 references/，能力未丢失。",
+    "archived": {
+      "nature-polishing": "→ paper-formal-writer/references/ai-traffic-light.md（AI 红绿灯+paper-type 诊断）",
+      "nature-writing": "→ paper-formal-writer/references/english-academic-writing.md（美赛英文写作）",
+      "nature-figure": "→ paper-workflow-orchestrator/references/figure-evidence-layering.md（面板证据分层）",
+      "nature-paper2ppt": "→ defense-ppt-builder-zh skill（国赛中文答辩 PPT）",
+      "nature-reader": "→ award-paper-rag/references/bilingual-reader-protocol.md（中英对照精读）",
+      "nature-academic-search": "→ authoritative-data-harvester/references/multi-source-search.md（多源检索）",
+      "nature-citation": "CNS 白名单国赛不用，分段-证据分级已被 citation-tracer 覆盖",
+      "nature-data": "FAIR/数据可用性声明国赛无需求",
+      "nature-response": "仅期刊投稿审稿回复用",
+      "academic-paper-strategist": "哲学论文规划（PhilArchive），与竞赛无关",
+      "academic-paper-composer": "哲学论文写作，同上",
+      "academic-defense-pptx": "→ defense-ppt-builder-zh skill（合并）",
+      "csv-data-summarizer": "→ data-cleaning-and-visualization/references/quick-eda-protocol.md（快速EDA）",
+      "result-validator": "→ quality-assurance-auditor/references/result-validation-rules.md（结果验证规则集）"
+    }
+  },
+
+  "knowledge_assets_by_stage": {
+    "_desc": "知识资产按阶段分类。每阶段列核心资产，门禁通过 knowledge_checkpoint.md 检查是否查阅。资产不用就是最大的浪费——这些是项目沉淀的核心价值。",
+    "阶段0_启动": {
+      "outputs/INDEX.md": "知识骨干统一索引（必读，定位全部资产）",
+      "outputs/task_router.md": "任务路由（判断任务类型）",
+      "outputs/asset_registry.md": "资产清单"
+    },
+    "阶段1_选模": {
+      "outputs/method_matching.md": "11类任务×模型×算法×风险对照（选模主入口）",
+      "model-selector/references/model-selection-matrix.md": "95+场景直查表",
+      "model-selector/references/hmml/": "HMML 分层方法库（5domain/18subdomain/97method）",
+      "model-selector/references/problem-decomposition.md": "12型问题分类法",
+      "resources/11_题型playbook/": "12个端到端playbook"
+    },
+    "阶段2_代码": {
+      "resources/04_代码模板/": "14种必备算法 Python/Matlab",
+      "resources/10_算法cookbook/": "8大类算法手写实现（optimization/ml/evaluation/mechanistic/statistical/network/clustering/game-theory）",
+      "resources/14_科学计算参考/": "sklearn/matplotlib/seaborn/statsmodels/sympy/networkx 参考"
+    },
+    "阶段3_写作": {
+      "outputs/writing_templates.md": "高分写作填空式模板",
+      "outputs/phrase_bank.md": "国赛获奖论文高频句式",
+      "paper-formal-writer/references/section-architecture.md": "摘要6要素/引言5要素/结果证据阶梯",
+      "paper-formal-writer/references/evidence-pyramid.md": "4层证据金字塔",
+      "paper-formal-writer/references/common-phrases.md": "中英双语学术短语库",
+      "paper-formal-writer/references/ai-traffic-light.md": "AI 写作边界红绿灯（v4.8 从 nature-polishing 抽取）",
+      "paper-formal-writer/references/english-academic-writing.md": "美赛英文写作指南（v4.8 从 nature-writing 抽取）",
+      "paper-workflow-orchestrator/references/figure-evidence-layering.md": "图表面板证据分层原则（v4.8 从 nature-figure 抽取）",
+      "outputs/empirical.json": "图表/公式数量实测分位",
+      "outputs/dim_weights.json": "题型差异化加权"
+    },
+    "阶段4_降AI味": {
+      "paper-formal-writer/references/anti-ai-detection-guide.md": "8类AI痕迹识别与去除",
+      "paper-formal-writer/references/four-round-self-review.md": "4轮自审框架",
+      "paper-formal-writer/references/literature-review-guide.md": "T1/T2/T3信源路由"
+    },
+    "阶段5_评审": {
+      "outputs/scoring_rubric.md": "7维度100分制评分量表（唯一标准）",
+      "outputs/final_quality_gate.md": "P0/P1/P2 阻断项清单",
+      "outputs/revision_checklist.md": "修改清单",
+      "quality-assurance-auditor/references/result-validation-rules.md": "结果验证规则集（v4.8 从 result-validator 抽取）"
+    },
+    "阶段6_答辩": {
+      "outputs/defense_qa_bank.md": "答辩问答库模板",
+      "outputs/defense_followup_chains.md": "30条追问链",
+      "defense-ppt-builder-zh/SKILL.md": "国赛答辩 PPT 生成器（v4.8 新建）",
+      "resources/02_优秀论文/": "O奖/国赛优秀论文参考（100+篇）"
+    },
+    "阶段7_数据标准": {
+      "outputs/data_cleaning_standards.md": "字段/单位/缺失/异常处理标准",
+      "outputs/table_templates.md": "表格模板",
+      "outputs/figure_templates.md": "图表模板",
+      "data-cleaning-and-visualization/references/quick-eda-protocol.md": "快速 EDA 协议（v4.8 从 csv-data-summarizer 抽取）",
+      "authoritative-data-harvester/references/multi-source-search.md": "多源文献检索协议（v4.8 从 nature-academic-search 抽取）",
+      "award-paper-rag/references/bilingual-reader-protocol.md": "中英对照精读协议（v4.8 从 nature-reader 抽取）"
+    },
+    "参考资料_随时": {
+      "resources/08_参考资料/": "速成讲义+32种方法教材+经典题解90+灵敏度论文",
+      "resources/06_图表教程/": "50+炫酷图表教程",
+      "resources/12_写作参考/": "摘要/文献综述/模型验证/常用短语/国赛美赛指南"
+    }
+  }
+}

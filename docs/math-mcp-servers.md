@@ -11,7 +11,7 @@
 | **sympy-mcp** | 符号计算（推导/化简/解方程） | 验算论文公式推导是否正确 | ⭐⭐⭐ |
 | **mcp-optimizer** | 运筹优化（PuLP/OR-Tools） | 优化题（调度/路径/资源分配） | ⭐⭐⭐ |
 | **arxiv-latex-mcp** | 拉 arXiv 论文 LaTeX 源码 | 深入理解某方法的数学细节 | ⭐⭐ |
-| **semantic-scholar-mcp** | 2 亿论文图谱 + 引用网络 | 真实文献检索（补 nature-citation） | ⭐⭐ |
+| **semantic-scholar-mcp** | 2 亿论文图谱 + 引用网络 | 真实文献检索（补 citation-tracer） | ⭐⭐ |
 | **Wolfram-MCP** | Wolfram 高精度计算 | 复杂数值/符号（需 Wolfram ID） | ⭐ |
 | **math-mcp** | 基础数学/统计 | 简单计算兜底 | ⭐ |
 

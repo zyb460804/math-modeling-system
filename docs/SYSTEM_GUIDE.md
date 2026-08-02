@@ -92,7 +92,7 @@
 
 **做不好的**：
 - 需要深度数学推导的问题（需要人工介入）
-- 参考文献可能编造（需要 `nature-academic-search` 验证）
+- 参考文献可能编造（需要 `citation-tracer` 验证）
 - 复杂多步问题需要手动拆解
 
 ---
@@ -345,7 +345,7 @@ disable-model-invocation: true  # 可选：禁止 Claude 自动调用
 | `chart-recommender` | `/chart-recommender` | 题型→最佳图表类型+matplotlib 代码 | 50+ 图表没有路由 |
 | `defense-simulator` | `/defense-simulator` | 根据论文内容生成评委问题+追问链 | 答辩准备锦上添花 |
 | `algorithm-runner` | `/algorithm-runner` | 匹配算法名→适配数据→执行→输出 JSON | 64 个模板没有一键执行 |
-| `result-validator` | 自动触发 | 范围检查、统计检验、异常值检测 | 防止低级错误进入论文 |
+| ~~`result-validator`~~ | ~~自动触发~~ | ~~范围检查、统计检验~~ | **v4.8 归档** → `check_result_reasonableness.py` + `result-validation-rules.md` |
 | `paper-rewriter` | `/paper-rewriter` | 输入原文+目标风格→改写版本 | 论文润色 |
 | `diagram-maker` | `/diagram-maker` | 模型求解流程图、方法架构图 | 每篇论文都需要流程图 |
 | `interactive-chart` | `/interactive-chart` | Plotly 3D 曲面、平行坐标 | 数据探索+答辩交互 |
@@ -1372,7 +1372,7 @@ run.element.rPr.rFonts.set(
 
 **原因**：Claude 会根据上下文生成看起来合理的文献
 
-**解决**：使用 `nature-academic-search` MCP Server 检索真实文献
+**解决**：使用 `citation-tracer` skill 验证引用真实性，或用 `authoritative-data-harvester`（含多源检索子能力）检索真实文献
 
 ### 8.4 格式门禁相关
 
@@ -1426,7 +1426,9 @@ def has_required_section(text, label):
 
 ## 9. 附录
 
-### 9.1 完整 Skill 列表（55 个）
+### 9.1 完整 Skill 列表（54 个，v4.8）
+
+> v4.8 归档 14 个（9 Nature + academic-paper-strategist/composer/defense-pptx + csv-data-summarizer + result-validator），新建 1 个（defense-ppt-builder-zh）。详见 `.claude/settings.json`。
 
 ```json
 {
@@ -1440,15 +1442,6 @@ def has_required_section(text, label):
     "figure": { "name": "生成图示" },
     "defense": { "name": "准备答辩" },
     "submit": { "name": "提交包" },
-    "nature-polishing": { "name": "Nature学术润色" },
-    "nature-writing": { "name": "Nature学术写作" },
-    "nature-figure": { "name": "Nature科学图表" },
-    "nature-citation": { "name": "Nature文献引用" },
-    "nature-data": { "name": "数据可用性声明" },
-    "nature-reader": { "name": "论文双语阅读器" },
-    "nature-response": { "name": "审稿回复信" },
-    "nature-paper2ppt": { "name": "论文转PPT" },
-    "nature-academic-search": { "name": "多源学术搜索" },
     "git-snapshot": { "name": "项目快照" },
     "algorithm-test": { "name": "代码测试" },
     "paper-workflow-orchestrator": { "name": "论文流水线总控" },
@@ -1474,18 +1467,26 @@ def has_required_section(text, label):
     "chart-recommender": { "name": "图表推荐" },
     "defense-simulator": { "name": "答辩模拟" },
     "algorithm-runner": { "name": "算法执行" },
-    "result-validator": { "name": "结果验证" },
     "paper-rewriter": { "name": "段落改写" },
     "diagram-maker": { "name": "流程图生成" },
     "interactive-chart": { "name": "交互式图表" },
     "math-figure": { "name": "数学图表" },
     "network-graph": { "name": "网络图可视化" },
-    "academic-defense-pptx": { "name": "学术答辩PPT" },
-    "academic-paper-composer": { "name": "学术论文写作" },
-    "academic-paper-strategist": { "name": "学术论文规划" },
+    "defense-ppt-builder-zh": { "name": "国赛答辩PPT生成器" },
     "aigc-reduce": { "name": "AIGC降重" },
-    "csv-data-summarizer": { "name": "CSV数据摘要" },
-    "humanizer-zh-academic": { "name": "中文学术降AI" }
+    "humanizer-zh-academic": { "name": "中文学术降AI" },
+    "consistency-auditor": { "name": "一致性审计" },
+    "completeness-auditor": { "name": "完整性审计" },
+    "decision-logger": { "name": "决策日志" },
+    "feature-engineering": { "name": "特征工程" },
+    "algorithm-benchmark": { "name": "算法基准测试" },
+    "style-calibration": { "name": "写作风格校准" },
+    "citation-tracer": { "name": "引用溯源" },
+    "ai-failure-checker": { "name": "AI失败模式检查" },
+    "blind-panel": { "name": "盲评Panel" },
+    "typst-renderer": { "name": "Typst论文渲染" },
+    "docx-editor-cn": { "name": "Word原生公式与XML编辑" },
+    "award-paper-rag": { "name": "O奖论文章节级RAG" }
   }
 }
 ```

@@ -4,8 +4,6 @@
 
 > ⚠️ **路径迁移公告（2026-07-25）**：`math-model-producer/` 已整体归档至 `resources/_archive/math-model-producer_old/`。本文件中 `math-model-producer/...` 路径前缀应替换为 `resources/_archive/math-model-producer_old/...`。
 
-> 系统同步说明：本文件已纳入统一数学建模生产系统。调用时默认遵循：任务路由 → 知识更新/资料入库 → 单题开工 → 数据理解 → 审题选模 → 代码/论文/图表/表格生产 → 动态验收 → 最终质量门 → 提交/答辩 → 经验回灌。涉及数据、字段、附件或参数时，先对齐 `outputs/data_cleaning_standards.md`；涉及提交、答辩或可复现判断时，先检查 `outputs/final_quality_gate.md`；缺真实数据或运行结果时，统一标为【待补】，不得编造。
-
 > 基于 `outputs/extracted_document_text/`、代码索引与现有知识库形成的新增材料回灌摘要。
 
 ## 一、抽取结果概览

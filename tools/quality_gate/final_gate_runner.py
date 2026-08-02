@@ -187,6 +187,18 @@ def main() -> int:
     else:
         steps.append({"gate": "G4.10_IMAGE_EMBED_GATE", "cmd": "N/A", "rc": 0, "pass": True,
                       "out_tail": "image_embed_check.py 未找到，跳过", "err_tail": ""})
+    # 7) Skill 调用强制门（v4.8 新增）：检查必调 skill 是否真调过
+    #    背景：规范要求 Agent 必须调 humanizer/review/defense 等 skill，但原门禁不查
+    #    FAIL（rc=1）阻断提交；WARN（rc=2）不阻断但提示覆盖率低
+    skill_script = here / "skill_invocation_gate.py"
+    if skill_script.exists():
+        r_skill = run([py, str(skill_script), "--paper-dir", str(paper_dir)], workdir)
+        skill_pass = r_skill["rc"] in (0, 2)  # WARN 不阻断，FAIL 阻断
+        steps.append({"gate": "G5_SKILL_INVOCATION_GATE", "cmd": r_skill["cmd"], "rc": r_skill["rc"],
+                      "pass": skill_pass, "out_tail": r_skill["out"][-1500:], "err_tail": r_skill["err"]})
+    else:
+        steps.append({"gate": "G5_SKILL_INVOCATION_GATE", "cmd": "N/A", "rc": 0, "pass": True,
+                      "out_tail": "skill_invocation_gate.py 未找到，跳过", "err_tail": ""})
 
     # 汇总
     failed = [s for s in steps if not s["pass"]]

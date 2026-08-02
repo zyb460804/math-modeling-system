@@ -59,7 +59,7 @@ subprocess.run(["python", algorithm_script, "--data", data_path, "--output", out
 
 ### 下一步
 - 运行 `/chart-recommender` 可视化结果
-- 运行 `/result-validator` 验证结果合理性
+- 运行 `quality-assurance-auditor/scripts/check_result_reasonableness.py` 验证结果合理性（参考 `result-validation-rules.md` 规则集，v4.8 整合自 result-validator）
 ```
 
 ## 可用算法速查

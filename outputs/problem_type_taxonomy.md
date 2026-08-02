@@ -2,8 +2,6 @@
 
 > **v2.0 标准化 | 2026-05-31** | 统一索引见 `outputs/INDEX.md`
 
-> 系统同步说明：本文件已纳入统一数学建模生产系统。调用时默认遵循：任务路由 → 知识更新/资料入库 → 单题开工 → 数据理解 → 审题选模 → 代码/论文/图表/表格生产 → 动态验收 → 最终质量门 → 提交/答辩 → 经验回灌。涉及数据、字段、附件或参数时，先对齐 `outputs/data_cleaning_standards.md`；涉及提交、答辩或可复现判断时，先检查 `outputs/final_quality_gate.md`；缺真实数据或运行结果时，统一标为【待补】，不得编造。
-
 > 用于沉淀数学建模题型分类体系。
 
 每类建议记录：
@@ -183,4 +181,3 @@
 - 若想从题型直接跳到可执行路线，优先联动 `outputs/case_to_method_route_library.md`。
 - 若想把链式题型快速写成“中间层—决策层”闭环，优先联动 `outputs/model_chain_blueprints.md`。
 - 若想判断某模型该不该上、什么时候该克制，优先联动 `outputs/algorithm_selection_red_flags.md`。
-

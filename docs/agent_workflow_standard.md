@@ -163,3 +163,48 @@
 - 若用户发现 Agent 跳过 skill 走捷径，有权要求 Agent 重做相应阶段
 - 若 Agent 自行发现跳步，应主动补做并在交付时声明"已补做 X 阶段"
 - 不得用"时间紧"作为跳步理由——时间紧应降级模式（fast），不能跳过核心 skill
+
+---
+
+## 六、代码级强制（v4.8 升级：从软约束到硬门禁）
+
+> 原 v1.0 规范是文档级软约束（靠 Agent 自觉读、自觉遵守）。v4.8 新增 `tools/quality_gate/skill_invocation_gate.py`（G5 门禁），把"必调 skill"变成代码级强制——**不调 skill → final_gate_runner FAIL → 不得提交**。
+
+### G5 必调 skill 门禁清单（FAIL 级，未调阻断提交）
+
+> **设计原则**：每个阶段至少 1 道门禁，确保"每个环节都调用了 skill 或知识库"，无裸做环节。
+
+| 门禁 | 阶段 | 必调 skill/知识库 | 期望产出文件 | 通过条件 |
+|------|------|------------------|-------------|---------|
+| G5.1 | 阶段0 任务启动 | 知识查阅（INDEX/matching/rubric/phrase_bank/section-arch）| `plan/knowledge_checkpoint.md` | 含 5 个关键词 |
+| G5.2 | 阶段1 选模 | model-selector（method_matching + matrix + HMML）| `plan/model_selection_check.md` | ≥500 字节 |
+| G5.3 | 阶段2 代码 | resources/04_代码模板 + 10_算法cookbook | `plan/code_reuse_check.md` | ≥300 字节 |
+| G5.4 | 阶段3 写作 | section-architecture + evidence-pyramid + scoring_rubric | `plan/writing_alignment_check.md` | 含摘要六要素+引言五要素关键词 |
+| G5.5 | 阶段4 降AI味 | humanizer-zh-academic | `qa/humanizer_report.json` | score ≥ 40/60 |
+| G5.6 | 阶段5 评审 | paper-reviewer agent | `qa/paper_reviewer_report.md` | ≥3000 字节 |
+| G5.7 | 阶段5.5 AI失败检查 | ai-failure-checker | `qa/ai_failure_check_report.json` | blocking = 0 |
+| G5.8 | 阶段5.5 引用验证 | citation-tracer | `qa/citation_trace_report.md` | ≥200 字节 |
+| G5.9 | 阶段6 答辩 | defense | `qa/defense_qa_bank.md` | ≥10 个问答标题 |
+
+### G5 建议调 skill 清单（WARN 级，不阻断但提示覆盖率低）
+
+| skill | 期望产出文件 |
+|-------|-------------|
+| paper-polisher | `qa/paper_polisher_report.md` |
+| style-calibration | `qa/style_calibration_report.md` |
+| robustness-checker | `qa/robustness_check_report.md` |
+| symbol-table-builder | `plan/symbol_table_auto.md` |
+| award-paper-rag mmqa retrieve | `qa/award_paper_rag_results.md` |
+| blind-panel（冲奖模式）| `qa/blind_panel_report.md` |
+
+### 执行方式
+
+```bash
+# 单独跑 G5 门禁
+python tools/quality_gate/skill_invocation_gate.py
+
+# 终检（含 G5，全过才可提交）
+python tools/quality_gate/final_gate_runner.py
+```
+
+G5 门禁会输出覆盖率（当前 8%，目标 100%），并在 FAIL 时给出每个 skill 的"怎么调"修复指引。

@@ -1,7 +1,8 @@
 # CLAUDE.md — 数学建模竞赛生产系统
 
-> **版本：v4.6 | 更新：2026-07-30**
-> **v4.0→v4.6 全演进一览**：`paper_output/research/CHANGELOG.md`（一眼看全 7 轮演进的定位/来源/新增/报告）
+> **版本：v4.8 | 更新：2026-08-02**
+> **v4.0→v4.8 全演进一览**：`paper_output/research/CHANGELOG.md`（一眼看全 8 轮演进的定位/来源/新增/报告）
+> **v4.8 变更摘要：** 第四档 skill 大扫除——"能转化的转化，不能的删除"。**归档 14 个 skill** 到 `.claude/skills/_archive/`（9 Nature + academic-paper-strategist/composer/defense-pptx + csv-data-summarizer + result-validator）。**方法论精华 100% 消化**：6 份新 references 文档（ai-traffic-light / english-academic-writing / figure-evidence-layering / bilingual-reader-protocol / multi-source-search / result-validation-rules）+ quick-eda-protocol + 1 个新 references 整合 csv 能力。**新建 1 个 skill**：`defense-ppt-builder-zh`（国赛中文答辩 PPT 生成器，融合 nature-paper2ppt + academic-defense-pptx）。**G5 门禁矩阵升级** v1.1（skill_applicability_matrix.json 含 archived_skills 清单 + 知识资产阶段映射新增 v4.8 文档）。**settings.json 精简**（删 14 个注册 + 添 defense-ppt-builder-zh + blind-panel）。skill 总数 67→54，第四档"几乎不触发"从 16 个→2 个（typst-renderer + docx-editor-cn 保留为可选交付链路）。源仓库 `nature-skills/` 完整保留。详见 `outputs/nature_skills_bridge.md` v3.0。
 > **v4.6 变更摘要：** 学术级方法论融合——`usail-hkust/LLM-MM-Agent`（NeurIPS 2025，MCM/ICM 2025 Finalist 前 2% 的建模副驾驶）。**HMML 分层建模方法库**（model-selector/references/hmml/）：5 domain / 18 subdomain / 97 method node 三层知识树（OR / Optimization / ML / Prediction / Evaluation），原样移植 180KB JSON + 162KB MD，选模从"场景→算法"升级为"问题→domain→subdomain→method"分层检索，与 model-selection-matrix（95+场景直查）互补。**actor-critic 选模算法指南**（hmml-retrieval-guide.md）：MethodScorer 自顶向下逐层打分（叶子 final_score = 父路径均分×0.5 + 自身分×0.5），LLM 批判 + embedding 相似双模式。**美赛题型分题策略**（problem-doc-model-selector/references/mcm-decompose-strategy.json+md）：A-F 六题型 × 3/4/5 子任务数的分题原则 + decompose→refine 两步流程，与 analyze skill 的 sub_problems 衔接。**scikit-opt 启发式算法桥接**（model-code-and-result-generator/references/heuristic-algo-scikit-opt.md）：7 种群体智能算法（DE/GA/PSO/SA/ACA/IA/AFSA）一行调用 + 与 cookbook-optimization 手写版的分工。共 8 新建 + 3 SKILL.md 修改，外科手术式增量不改骨架。详见 `paper_output/research/CHANGELOG.md`。
 > **v4.5 变更摘要：** 全面体检 + 断链清零（8 维度多智能体审计 37 条发现 → 全部处置）。**P0 修复**：`render_check.py` 编译期 SyntaxError（global 先用后声明）→ 图表质量门禁（figure/s6/all 阶段）自 v3.6 以来首次真正可用，CLI 文档同步为子命令写法。**断链清零**：8 个社区 skill 的 11 个"文档引用但从未落地"脚本全部实现并冒烟通过（citation-tracer 2 / style-calibration 2 / academic-paper-composer 2 / academic-paper-strategist 2 / ai-failure-checker 1 / algorithm-benchmark 1 / feature-engineering preprocess 1），4 个错位 references/ 文件归位。**QA 去硬编码**：4 个门禁脚本（parameter/result/sensitivity/baseline）的旧赛题硬编码外置到 `paper_output/plan/qa_config.json`（schema 示例见 `quality-assurance-auditor/references/qa_config.example.json`），缺配置显式 SKIP 消灭假绿灯；另 3 个脚本补 argparse（--help 不再触发主逻辑写报告）。**RAG 修复**：papers.csv 2 行残留空格路径修正（`mmqa split` 再生成链路解阻）、nodes jsonl 重生成 6910→6863 与索引对齐、requirements.txt 对齐实际 5 依赖。**环境补齐**：docx-editor-cn npm install（docx/fast-xml-parser/temml）+ pandoc 3.10 → Word 原生公式链全线可用；MiKTeX/pix2text 未装（LaTeX 编译与公式 OCR 分支需先装）。**文档一致性**：CLAUDE.md 10 处失实修正（01_真题与附件、MASTER_PROMPT 位置、skill 计数 7→8/16→13、G4.6 路径、目录树补录等）。**清理**：16 个 .DS_Store/Thumbs.db、7 个空占位目录、tools/README 对齐实际；resources 约 32.8GB 完整重复（03 合集副本 + 嵌套拷贝）已全量校验实锤，删除命令备于 `resources/03_方法算法/README_国赛C题合集已去重.md` 待手动执行。统一验证：130 py 编译 0 失败 / 16 必需文件全在 / 13 关键脚本 --help 全过。
 > **v4.4 变更摘要：** 系统整理 + 实测验证。架构：math-model-producer 归档至 `resources/_archive/`（单生产系统成型，双系统→单系统）。RAG：CSV 去重(254→251)、md 文件名尾随空格根因修复(`_safe_id` 截断后再 strip)、向量索引 rebuild(6863 节点，CSV=md=jsonl 三者一致)。文档：单系统路由全面更新(asset_registry/task_router/knowledge_update/deduplication/prompts-29/README/AGENTS 共 20+ 处)、3 个自动清单加迁移公告。实测验证：预检/状态门/门禁脚本全部跑通(`evidence_gate` 真实发现 Q3/Q5 缺评价指标、`check_paper_format` 发现 Word 缺图)、RAG 实测召回储能/微电网相关论文、11 个工具脚本全部 `--help` 通过。清理：39 个 `__pycache__` + 临时垃圾 + 重复 zip + `paper_output` 归档分层(`_archive_2026-06` / `_archive_2026-07_绿电直连型`)。
@@ -98,6 +99,8 @@ git push                                       # 远程已设 origin/main，无�
 
 违反以上规则，用户有权要求 Agent 重做相应阶段。详细禁止行为清单与执行顺序见 `docs/agent_workflow_standard.md`。
 
+**v4.8 升级为代码级强制**：`tools/quality_gate/skill_invocation_gate.py`（G5 门禁）会检查 7 个必调 skill 的产出文件（humanizer-zh-academic / paper-reviewer / defense / ai-failure-checker / citation-tracer / model-selector / 知识查阅），不调 skill → `final_gate_runner.py` FAIL → 不得提交。详细清单见 `docs/agent_workflow_standard.md` §六。
+
 ### 触发词统一入口（v3.4）
 
 > **核心原则：同一意图 → 默认最深输出。** 用户不需要知道"加什么词"才能拿到完整结果。
@@ -156,19 +159,22 @@ git push                                       # 远程已设 origin/main，无�
 | `submit` | 高分自检后输出论文+代码+图表+答辩清单（比赛提交包） | 生成提交包 |
 | `figure` | ★ 统一图表入口：自动判断需求→分派子skill→生成全部图表 | 生成图示/画图 |
 
-### 9 个 Nature 学术 Skill
+### ~~9 个 Nature 学术 Skill~~（v4.8 全部归档，方法论已消化）
 
-| Skill | 职责 |
-|-------|------|
-| `nature-polishing` | Nature 风格英文润色、学术翻译 |
-| `nature-writing` | Nature 风格论文写作、重建引言/讨论 |
-| `nature-figure` | Nature/高影响力期刊多面板科学图表 |
-| `nature-citation` | Nature/CNS 期刊文献检索与引用插入 |
-| `nature-data` | 数据可用性声明、FAIR 检查 |
-| `nature-reader` | 论文中英对照全文翻译、图表提取 |
-| `nature-response` | Nature 风格逐条审稿回复信 |
-| `nature-paper2ppt` | 论文转中文 PPT、组会汇报 |
-| `nature-academic-search` | PubMed/CrossRef/arXiv 多源文献检索 |
+> **归档位置**：`.claude/skills/_archive/`（git mv，可恢复）。**源仓库** `nature-skills/` 完整保留。
+> **详细公告**：`outputs/nature_skills_bridge.md` v3.0。
+
+| 原 Skill | 方法论精华去向 |
+|---------|--------------|
+| ~~`nature-polishing`~~ | → `paper-formal-writer/references/ai-traffic-light.md`（AI 红绿灯+paper-type） |
+| ~~`nature-writing`~~ | → `paper-formal-writer/references/english-academic-writing.md`（美赛英文写作） |
+| ~~`nature-figure`~~ | → `paper-workflow-orchestrator/references/figure-evidence-layering.md`（面板证据分层） |
+| ~~`nature-paper2ppt`~~ | → **`defense-ppt-builder-zh`** skill（国赛中文答辩 PPT，新建） |
+| ~~`nature-reader`~~ | → `award-paper-rag/references/bilingual-reader-protocol.md`（中英对照精读） |
+| ~~`nature-academic-search`~~ | → `authoritative-data-harvester/references/multi-source-search.md`（多源检索） |
+| ~~`nature-citation`~~ | → 已被 `citation-tracer` 覆盖（分段-证据分级） |
+| ~~`nature-data`~~ | → 国赛无 FAIR 需求（如需英文期刊投稿，参考 `nature-skills/` 源仓库） |
+| ~~`nature-response`~~ | → 仅期刊投稿用（同上） |
 
 ### 2 个工具 Skill
 
@@ -198,7 +204,7 @@ git push                                       # 远程已设 origin/main，无�
 | `chart-recommender` | 图表推荐 | → 由 `/figure` 内部调度 |
 | `defense-simulator` | 答辩模拟 | → 由 `/defense` 内部调度 |
 | `algorithm-runner` | 算法执行 | 独立入口（与 code 互补，互引） |
-| `result-validator` | 结果验证 | 自动触发 |
+| ~~`result-validator`~~ | ~~结果验证~~ | **v4.8 归档** → `quality-assurance-auditor/references/result-validation-rules.md` |
 | `paper-rewriter` | 段落改写 | → 由 `paper-polisher` 内部调度 |
 | `diagram-maker` | 流程图 | → 由 `/figure` 内部调度 |
 | `interactive-chart` | 交互图表 | → 由 `/figure` 内部调度 |
@@ -569,12 +575,11 @@ e:\数学建模\
 │   ├── competition-prep.md      历史案例匹配备战
 │   └── blind-panel-judge.md     ★ 盲评单座（v4.1，3 座并行之一）
 │
-├── .claude/skills/        ← ★ Claude Code Skill 包（67 个，v4.2 +3）
+├── .claude/skills/        ← ★ Claude Code Skill 包（54 个，v4.8 归档 14 个 + 新建 1 个）
 │   ├── [核心] 10 个流水线 skill（见上方 Native Skill 表，主轨道）
 │   ├── [Legacy] 9 个手动 skill（scan/card/rules/analyze/review/code/defense/submit/figure，口令已统一入口取代）
-│   ├── [新增] 10 个智能辅助 skill（model-selector/chart-recommender/defense-simulator/algorithm-runner/result-validator/paper-rewriter/diagram-maker/interactive-chart/math-figure/network-graph）
-│   ├── [Nature] 9 个学术写作 skill（nature-polishing/writing/figure/citation/data/reader/response/paper2ppt/academic-search）
-│   ├── [社区] 13 个社区 skill（zhnnky329 + Lupynow + academic-skills + Gabberflast + lishix520）
+│   ├── [新增] 9 个智能辅助 skill（model-selector/chart-recommender/defense-simulator/algorithm-runner/paper-rewriter/diagram-maker/interactive-chart/math-figure/network-graph）
+│   ├── [社区] 9 个社区 skill（zhnnky329 + Lupynow + academic-skills）
 │   │   ├── symbol-table-builder        符号表自动构建
 │   │   ├── robustness-checker          稳健性/灵敏度检查
 │   │   ├── matlab-model-code-generator  MATLAB 代码生成
@@ -582,12 +587,17 @@ e:\数学建模\
 │   │   ├── matlab-code-reviewer        MATLAB 代码审查
 │   │   ├── paper-polisher              论文润色
 │   │   ├── solution-package-builder    提交包生成
-│   │   ├── academic-defense-pptx       学术答辩PPT生成（Gabberflast）
-│   │   ├── academic-paper-strategist   学术论文规划（lishix520）
-│   │   ├── academic-paper-composer     学术论文写作（lishix520）
 │   │   ├── aigc-reduce                AIGC降重/去AI味（xiaofenggan01）
-│   │   ├── humanizer-zh-academic       中文学术写作降AIGC检测（redbaronyyyyy-eng）
-│   │   └── csv-data-summarizer        CSV自动分析+可视化（coffeefuelbump）
+│   │   └── humanizer-zh-academic       中文学术写作降AIGC检测（redbaronyyyyy-eng）
+│   ├── [GitHub融合] 8 个新增 skill（v3.6-v3.7）
+│   │   ├── consistency-auditor         一致性审计（三审计层第一层）
+│   │   ├── completeness-auditor        完整性审计（三审计层第二层）
+│   │   ├── decision-logger             决策日志记录
+│   │   ├── feature-engineering         特征工程标准化流程
+│   │   ├── algorithm-benchmark         算法基准测试
+│   │   ├── style-calibration           写作风格校准
+│   │   ├── citation-tracer             引用溯源工具
+│   │   └── ai-failure-checker          AI失败模式检查（7-mode checklist）
 │   ├── [GitHub融合] 8 个新增 skill（v3.6-v3.7）
 │   │   ├── consistency-auditor         一致性审计（三审计层第一层）
 │   │   ├── completeness-auditor        完整性审计（三审计层第二层）
@@ -603,9 +613,26 @@ e:\数学建模\
 │   │   ├── typst-renderer             Typst 论文渲染（34 套赛事模板 + typst_index.json）
 │   │   ├── docx-editor-cn             Word 原生公式（temml→docx）+ XML unpack/pack/validate
 │   │   └── award-paper-rag            O 奖论文章节级 RAG（heading 分块 + 13 类分类器）
-│   └── [工具] 4 个工具 skill（git-snapshot/algorithm-test/latex-renderer/word-counter）
+│   ├── [v4.8 新建] 1 个 skill（消化 Nature 方法论后填补空白）
+│   │   └── defense-ppt-builder-zh     国赛中文答辩 PPT 生成器（.pptx，融合 nature-paper2ppt + academic-defense-pptx）
+│   ├── [工具] 4 个工具 skill（git-snapshot/algorithm-test/latex-renderer/word-counter）
+│   └── _archive/                      ★ v4.8 归档区（14 个已消化 skill，git mv 可恢复）
+│       ├── nature-polishing/          → ai-traffic-light.md
+│       ├── nature-writing/            → english-academic-writing.md
+│       ├── nature-figure/             → figure-evidence-layering.md
+│       ├── nature-paper2ppt/          → defense-ppt-builder-zh
+│       ├── nature-reader/             → bilingual-reader-protocol.md
+│       ├── nature-academic-search/    → multi-source-search.md
+│       ├── nature-citation/           → citation-tracer 覆盖
+│       ├── nature-data/               → 国赛无需求
+│       ├── nature-response/           → 仅期刊投稿
+│       ├── academic-paper-strategist/ → 哲学论文，与竞赛无关
+│       ├── academic-paper-composer/   → 同上
+│       ├── academic-defense-pptx/     → defense-ppt-builder-zh 合并
+│       ├── csv-data-summarizer/       → quick-eda-protocol.md
+│       └── result-validator/          → result-validation-rules.md
 │
-├── prompts/               ← 31 个工作流提示词（00-30）
+├── prompts/               ← ⚠️ 已归档（v4.8）：32 个文件移到 `_archive/`，100% 有 skill 替代，主路径不再使用。详见 `prompts/README.md`
 │   ├── MASTER_PROMPT_math_modeling.txt  总控提示词
 │   ├── 00_route_task.md       任务路由
 │   ├── 01-03                  扫描/抽卡/建规则
@@ -707,7 +734,7 @@ e:\数学建模\
 ## 核心工作流（单系统 · Skill 流水线）
 
 > **v4.4 起：双系统已收敛为单生产系统**（math-model-producer 归档至 `resources/_archive/`）。
-> **v3.4 起：触发词统一入口已取代旧"轨道 B"手动口令**——9 个 Legacy Skill 降级为内部调度工具，`prompts/` 降级为参考文档，不再是独立对等轨道。当前系统是**单轨道：Skill 流水线**。
+> **v3.4 起：触发词统一入口已取代旧"轨道 B"手动口令**——9 个 Legacy Skill 降级为内部调度工具，`prompts/` v4.8 起归档到 `_archive/`（32 个文件 100% 有 skill 替代）。当前系统是**单轨道：Skill 流水线**。
 
 ### Skill 流水线（主轨道）
 
@@ -719,7 +746,7 @@ e:\数学建模\
 
 ### Prompt 工作流（Legacy 参考）
 
-> `prompts/00-30` 的 31 个提示词文件仍保留为**参考文档**，用于灵活/局部任务和离线参考，但不再是与 Skill 并列的独立工作流。所有核心能力（审题/选模/代码/图表/评审/答辩/提交）均已由 Skill 统一入口覆盖（见下方口令映射）。
+> `prompts/00-30` 的 32 个提示词文件 **v4.8 已归档到 `prompts/_archive/`**（100% 有 skill 替代，实测 0 调用）。如需回退可从 `_archive/` 恢复，但正常工作流应走 Skill。详见 `prompts/README.md`。
 
 ```
 任务路由 → 知识更新/资料入库 → 单题开工 → 数据理解 → 审题选模 →
@@ -733,7 +760,7 @@ e:\数学建模\
 | # | 规则 | 入口文件 |
 |---|------|----------|
 | 1 | **Skill 优先路由** | `.claude/skills/paper-workflow-orchestrator/SKILL.md` |
-| 2 | **Prompt 路由备选** | `prompts/00_route_task.md` 或 `outputs/task_router.md` |
+| 2 | **Prompt 路由备选** | `outputs/task_router.md`（prompts/ 已归档到 `_archive/`）|
 | 3 | **评分唯一标准** | `outputs/scoring_rubric.md`（100 分制，7 维度，**不改分值**）；按 task_type 加权判等见 `outputs/dim_weights.json`（v4.1） |
 | 4 | **优先复用沉淀** | `outputs/INDEX.md` 定位 → 调用对应模板 |
 | 5 | **代码生成顺序** | 题型 → 模型 → 代码结构 → 主体代码 → 标注可运行/待补 |

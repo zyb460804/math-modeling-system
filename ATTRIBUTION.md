@@ -64,9 +64,10 @@
 | [FinDii/FeatureEngineering](https://github.com/FinDii/FeatureEngineering) | feature-engineering skill |
 | [szilard/benchm-ml](https://github.com/szilard/benchm-ml) | algorithm-benchmark skill |
 | [Imbad0202/academic-research-skills](https://github.com/Imbad0202/academic-research-skills) | style-calibration、citation-tracer、ai-failure-checker skill |
-| Gabberflast | academic-defense-pptx skill |
-| lishix520 | academic-paper-composer、academic-paper-strategist skill |
-| coffeefuelbump | csv-data-summarizer skill |
+| Gabberflast | academic-defense-pptx skill（v4.8 已归档，方法论合并到 defense-ppt-builder-zh） |
+| lishix520 | academic-paper-composer、academic-paper-strategist skill（v4.8 已归档，与竞赛无关） |
+| coffeefuelbump | csv-data-summarizer skill（v4.8 已归档，方法论整合到 data-cleaning-and-visualization/references/quick-eda-protocol.md） |
+| Yuan1z (nature-skills) | nature-polishing/writing/figure/citation/data/reader/response/paper2ppt/academic-search（v4.8 全部归档，方法论精华已抽取到 references/） |
 | xiaofenggan01 | aigc-reduce skill |
 | redbaronyyyyy-eng | humanizer-zh-academic skill |
 

@@ -56,7 +56,7 @@ description: 论文段落改写：输入原文+目标风格（学术/简洁/有�
 - 对标 `outputs/section_writing_templates.md` 的段落结构
 
 ### 英文论文
-- 使用 `nature-polishing` skill 的 Nature 风格规则
+- 参考 `paper-formal-writer/references/english-academic-writing.md`（v4.8 从 nature-writing 抽取的美赛英文写作指南）
 - 避免中式英语，使用地道学术表达
 - 保持时态一致性（方法用过去时，结论用现在时）
 

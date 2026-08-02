@@ -25,10 +25,9 @@ description: ★ 统一图表入口。自动判断论文需要什么图，调度
          │ 自动判断需要哪些图
          ├──► diagram-maker     → 流程图/架构图/算法步骤图
          ├──► chart-recommender → 数据结果图（柱状/折线/热力/雷达等）
-         ├──► math-figure       → 函数图/几何图/概率分布/等高线
+         ├──► math-figure       → 函数图/几何图/出版级多面板图（v4.8 合并 nature-figure）
          ├──► network-graph     → 图论网络图/最短路径/社区检测
-         ├──► interactive-chart → Plotly 交互图（答辩用）
-         └──► nature-figure     → Nature 出版级多面板图（自动联动）
+         └──► interactive-chart → Plotly 交互图（答辩用）
 ```
 
 ## 工作流
@@ -49,11 +48,11 @@ description: ★ 统一图表入口。自动判断论文需要什么图，调度
 | 模型建立 | 模型求解流程图/方法架构图 | `diagram-maker` |
 | 模型建立 | 指标体系结构图 | `diagram-maker` |
 | 求解过程 | 算法步骤图 | `diagram-maker` |
-| 结果分析 | 结果对比柱状图/折线图/雷达图等 | `chart-recommender` → `nature-figure` |
-| 结果分析 | 预测拟合曲线+置信区间 | `math-figure` → `nature-figure` |
+| 结果分析 | 结果对比柱状图/折线图/雷达图等 | `chart-recommender` → `math-figure` |
+| 结果分析 | 预测拟合曲线+置信区间 | `math-figure` |
 | 结果分析 | 优化收敛曲线/3D响应面 | `interactive-chart` / `math-figure` |
 | 结果分析 | 网络拓扑/最短路径图 | `network-graph` |
-| 稳健性 | 灵敏度热力图/扰动对比图 | `chart-recommender` → `nature-figure` |
+| 稳健性 | 灵敏度热力图/扰动对比图 | `chart-recommender` → `math-figure` |
 | 答辩 | 交互式图表（HTML） | `interactive-chart` |
 
 ### Step 2: 生成图示方案
@@ -77,7 +76,7 @@ description: ★ 统一图表入口。自动判断论文需要什么图，调度
 ### Step 3: 逐图生成
 
 按优先级逐个调用子 skill 生成图表：
-- 数据驱动的结果图 → `chart-recommender` 推荐类型 + `nature-figure` 出版级渲染
+- 数据驱动的结果图 → `chart-recommender` 推荐类型 + `math-figure` 出版级渲染（参考 `figure-evidence-layering.md` 面板证据分层）
 - 流程图/架构图 → `diagram-maker`（Mermaid 预览 + matplotlib 出版级）
 - 数学图 → `math-figure`
 - 网络图 → `network-graph`
@@ -114,16 +113,17 @@ description: ★ 统一图表入口。自动判断论文需要什么图，调度
 |----------|---------|------|------|
 | `diagram-maker` | 需要流程图/架构图/算法步骤图/数据流向图 | 论文模型结构和算法流程 | Mermaid + matplotlib PNG/SVG |
 | `chart-recommender` | 需要数据结果图（柱状/折线/雷达/热力等） | 题型+数据特征+展示目的 | 推荐图表类型+matplotlib 代码 |
-| `math-figure` | 需要函数图像/几何示意/概率分布/等高线 | 数学公式或数据 | 300DPI PNG + SVG |
+| `math-figure` | 需要函数图像/几何示意/概率分布/等高线/出版级多面板图 | 数学公式或数据 + 图名/轴定义/配色 | 300DPI PNG + SVG |
 | `network-graph` | 需要图论网络可视化 | 节点/边/权重数据 | 静态 PNG + 交互式 HTML |
 | `interactive-chart` | 需要答辩用交互式图表 | 数据 + 展示维度 | Plotly HTML |
-| `nature-figure` | 需要出版级数据图表（论文终稿用） | 数据 + 图名/轴定义/配色 | PNG+SVG+PDF 300DPI |
+
+> **出版级多面板图设计原则**：参考 `paper-workflow-orchestrator/references/figure-evidence-layering.md`（v4.8 从 nature-figure 抽取的"每面板一证据"原则 + 原型分类 + 配色策略）。
 
 ### 自动联动规则
 
-当图表属于以下类型时，**自动联动 `nature-figure`** 生成出版级版本：
+当图表属于以下类型时，**自动应用 `figure-evidence-layering.md` 面板证据分层原则**：
 
-| 图的类型 | 是否联动 nature-figure | 说明 |
+| 图的类型 | 是否应用证据分层 | 说明 |
 |----------|----------------------|------|
 | 结果展示图（柱状/条形/折线） | ✅ 必须联动 | 数据驱动，需要出版级质量 |
 | 灵敏度/稳健性展示图 | ✅ 必须联动 | 数据驱动 |

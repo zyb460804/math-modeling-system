@@ -165,42 +165,6 @@
       "description": "高分自检后输出论文+代码+图表+答辩清单",
       "disable-model-invocation": true
     },
-    "nature-polishing": {
-      "name": "Nature学术润色",
-      "description": "Nature风格英文润色、学术翻译、改写摘要"
-    },
-    "nature-writing": {
-      "name": "Nature学术写作",
-      "description": "Nature风格论文写作、重建引言/讨论/结论"
-    },
-    "nature-figure": {
-      "name": "Nature科学图表",
-      "description": "Nature/高影响力期刊多面板科学图表"
-    },
-    "nature-citation": {
-      "name": "Nature文献引用",
-      "description": "Nature/CNS期刊文献检索与引用插入"
-    },
-    "nature-data": {
-      "name": "数据可用性声明",
-      "description": "Nature数据可用性声明、FAIR检查、数据仓库选型"
-    },
-    "nature-reader": {
-      "name": "论文双语阅读器",
-      "description": "论文中英对照全文翻译、图表提取"
-    },
-    "nature-response": {
-      "name": "审稿回复信",
-      "description": "Nature风格逐条审稿回复信撰写与修订"
-    },
-    "nature-paper2ppt": {
-      "name": "论文转PPT",
-      "description": "论文转中文PPT、组会/期刊俱乐部汇报"
-    },
-    "nature-academic-search": {
-      "name": "多源学术搜索",
-      "description": "PubMed/CrossRef/arXiv多源文献检索与格式转换"
-    },
     "git-snapshot": {
       "name": "项目快照",
       "description": "创建项目时间点快照，保留最近10个版本",
@@ -224,11 +188,11 @@
     },
     "authoritative-data-harvester": {
       "name": "权威数据获取",
-      "description": "外部权威数据/文献采集与补充"
+      "description": "外部权威数据/文献采集与补充（含多源检索子能力，v4.8 整合自 nature-academic-search）"
     },
     "data-cleaning-and-visualization": {
       "name": "数据清洗与可视化",
-      "description": "数据处理、图表计划与生成"
+      "description": "数据处理、图表计划与生成（含快速EDA子能力，v4.8 整合自 csv-data-summarizer）"
     },
     "model-code-and-result-generator": {
       "name": "建模代码与结果",
@@ -236,11 +200,11 @@
     },
     "quality-assurance-auditor": {
       "name": "质量门禁审计",
-      "description": "证据门禁检查、QA任务清单、最终把关"
+      "description": "证据门禁检查、QA任务清单、最终把关（含结果验证规则集，v4.8 整合自 result-validator）"
     },
     "paper-formal-writer": {
       "name": "正式论文成稿",
-      "description": "正式成稿、大纲契约、Word排版、格式门禁"
+      "description": "正式成稿、大纲契约、Word排版、格式门禁（含AI边界红绿灯+美赛英文写作子能力，v4.8 整合自 nature-polishing/writing）"
     },
     "paper-micro-unit-generator": {
       "name": "微单元生成",
@@ -306,11 +270,6 @@
       "description": "一键运行算法模板：匹配算法名→适配数据→执行→输出结果JSON",
       "disable-model-invocation": true
     },
-    "result-validator": {
-      "name": "结果验证",
-      "description": "验证模型结果数值合理性：范围检查、统计检验、异常值检测",
-      "user-invocable": false
-    },
     "paper-rewriter": {
       "name": "段落改写",
       "description": "论文段落改写：输入原文+目标风格（学术/简洁/有力），输出改写版本"
@@ -331,25 +290,13 @@
       "name": "网络图可视化",
       "description": "图论/网络可视化：最短路径高亮、社区检测着色、交互式网络图（PyVis）"
     },
-    "academic-defense-pptx": {
-      "name": "学术答辩PPT",
-      "description": "学术答辩/会议报告PPT内容与结构设计（配合pptx skill生成文件）"
-    },
-    "academic-paper-composer": {
-      "name": "学术论文写作",
-      "description": "从优化大纲到投稿就绪稿件的系统化写作框架"
-    },
-    "academic-paper-strategist": {
-      "name": "学术论文规划",
-      "description": "学术论文战略规划：研究空白识别、大纲优化、预印本投稿准备"
+    "defense-ppt-builder-zh": {
+      "name": "国赛答辩PPT生成器",
+      "description": "国赛/五一赛/MathorCup 中文答辩PPT生成器（.pptx文件）。融合 nature-paper2ppt 论证骨架+自审循环与 academic-defense-pptx 结构化论证。与 defense skill 衔接：defense 出 Markdown 问答库，本 skill 出 .pptx（v4.8 新建）"
     },
     "aigc-reduce": {
       "name": "AIGC降重",
       "description": "降低学术论文AIGC查重率和AI味，基于知网/万方/PaperPass检测器原理"
-    },
-    "csv-data-summarizer": {
-      "name": "CSV数据摘要",
-      "description": "分析CSV文件，生成摘要统计和快速可视化（pandas）"
     },
     "humanizer-zh-academic": {
       "name": "中文学术降AI",
@@ -397,7 +344,11 @@
     },
     "award-paper-rag": {
       "name": "O奖论文章节级RAG",
-      "description": "按heading章节分块+13类分类器，年份/题号/章节多维过滤检索190+篇优秀论文（v4.2 Kirito）"
+      "description": "按heading章节分块+13类分类器，年份/题号/章节多维过滤检索190+篇优秀论文（v4.2 Kirito）；含中英对照精读协议（v4.8 整合自 nature-reader）"
+    },
+    "blind-panel": {
+      "name": "盲评Panel",
+      "description": "3座独立盲评+20分冲突仲裁+真实稀缺性校准（v4.1 handsomeZR+mathodology）"
     }
   }
 }
