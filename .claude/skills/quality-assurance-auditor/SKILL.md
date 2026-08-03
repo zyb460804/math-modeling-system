@@ -1,6 +1,6 @@
 ---
 name: quality-assurance-auditor
-description: "强制审计论文生成质量，防止模型偷换、逻辑断链、内容空洞。Invoke when 用户提出检查/审计/验收/确保/verify/QA，或合并前需要把关。"
+description: "强制审计论文生成质量，防止模型偷换、逻辑断链、内容空洞。Invoke when 用户提出检查/审计/验收/确保/verify/QA，或合并前需要把关。触发词：质量审计、QA、evidence gate、证据门禁、工作流检查、质量验收、verify quality、门禁检查。"
 ---
 
 # 质量审计员（Quality Assurance Auditor）

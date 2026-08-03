@@ -11,7 +11,7 @@ from docx import Document
 from docx.enum.section import WD_SECTION_START
 from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
+from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
@@ -30,6 +30,58 @@ REPORT_MD_FORMAL = OUTPUT_DIR / "format_check_report.md"
 REPORT_MD_DRAFT = OUTPUT_DIR / "format_draft_report.md"
 DOCX_FILE = DOCX_FILE_FORMAL
 REPORT_MD = REPORT_MD_FORMAL
+
+
+# ── 跨 skill 复用 docx-editor-cn 的 LaTeX→OMML（pandoc 链路）─────────────────
+# 依赖：pandoc ≥ 2.0（v4.5 体检已装机）。失败时退化为 Cambria Math 纯文本，
+# 不阻断生成（但 Word 双击公式不会进编辑器）。
+_DOCX_EDITOR_SCRIPTS = BASE_DIR / ".claude" / "skills" / "docx-editor-cn" / "scripts"
+if str(_DOCX_EDITOR_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_DOCX_EDITOR_SCRIPTS))
+try:
+    from formula import latex_to_omml as _latex_to_omml_pandoc  # type: ignore[import-not-found]
+    _FORMULA_AVAILABLE = True
+except Exception as _exc:  # pragma: no cover - 环境问题兜底
+    _FORMULA_AVAILABLE = False
+    print(
+        f"[formula] 警告：无法加载 latex_to_omml（{type(_exc).__name__}: {_exc}）。"
+        "公式将以 Cambria Math 纯文本呈现，非 Word 原生 OMML。",
+        file=sys.stderr,
+    )
+
+_OMML_CACHE: dict[str, str] = {}
+INLINE_FORMULA_PAT = re.compile(r"\$([^$\n]+?)\$")
+
+
+def _latex_to_omml_cached(latex: str) -> str:
+    """LaTeX → OMML XML 片段，带缓存。失败返回空串。"""
+    if latex in _OMML_CACHE:
+        return _OMML_CACHE[latex]
+    if not _FORMULA_AVAILABLE:
+        _OMML_CACHE[latex] = ""
+        return ""
+    try:
+        omml = _latex_to_omml_pandoc(latex)
+        _OMML_CACHE[latex] = omml
+        return omml
+    except Exception as exc:
+        print(f"[formula] LaTeX→OMML 失败 ({latex!r}): {exc}", file=sys.stderr)
+        _OMML_CACHE[latex] = ""
+        return ""
+
+
+def _append_omml(paragraph, latex: str) -> bool:
+    """把 LaTeX 转 OMML 并 append 到段落元素。成功返回 True。"""
+    omml_xml = _latex_to_omml_cached(latex)
+    if not omml_xml:
+        return False
+    try:
+        omath = parse_xml(omml_xml)
+        paragraph._element.append(omath)
+        return True
+    except Exception as exc:
+        print(f"[formula] OMML 注入失败 ({latex!r}): {exc}", file=sys.stderr)
+        return False
 
 
 def configure_utf8_stdio() -> None:
@@ -61,7 +113,12 @@ def resolve_path(path_text: str) -> Path:
     path = Path(normalized)
     if path.is_absolute():
         return path
-    return BASE_DIR / path
+    # 相对路径：源稿写 figures/xxx.png 实际在 paper_output/figures/，
+    # 优先 paper_output/（图表实际位置），回退项目根
+    for candidate in (OUTPUT_DIR / path, BASE_DIR / path):
+        if candidate.exists():
+            return candidate
+    return OUTPUT_DIR / path
 
 
 def set_cell_shading(cell, fill: str) -> None:
@@ -152,13 +209,33 @@ def clean_inline_markdown(text: str) -> str:
     return text.strip()
 
 
+def _add_runs_with_inline_formula(paragraph, text: str, font: str = "宋体", size: float = 10.5, bold: bool = False) -> None:
+    """把含 $...$ 行内公式的文本拆分注入段落：公式走 OMML，其余走普通 run。
+
+    所有需要渲染含公式文本的段落（body/center/heading/list/table cell）都应调用此函数，
+    确保 100% 行内公式覆盖。无公式时退化为单个普通 run。
+    """
+    pos = 0
+    for m in INLINE_FORMULA_PAT.finditer(text):
+        if m.start() > pos:
+            run = paragraph.add_run(clean_inline_markdown(text[pos:m.start()]))
+            apply_run_font(run, font, size, bold)
+        latex = m.group(1).strip()
+        if not _append_omml(paragraph, latex):
+            run = paragraph.add_run(latex)
+            apply_run_font(run, "Cambria Math", size, bold)
+        pos = m.end()
+    if pos < len(text):
+        run = paragraph.add_run(clean_inline_markdown(text[pos:]))
+        apply_run_font(run, font, size, bold)
+
+
 def add_body_paragraph(document: Document, text: str) -> None:
     paragraph = document.add_paragraph()
     paragraph.paragraph_format.first_line_indent = Cm(0.74)
     paragraph.paragraph_format.line_spacing = 1.35
     paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    run = paragraph.add_run(clean_inline_markdown(text))
-    apply_run_font(run, "宋体", 10.5)
+    _add_runs_with_inline_formula(paragraph, text, "宋体", 10.5, False)
 
 
 def add_center_paragraph(document: Document, text: str, font_name: str = "宋体", size: float = 10.5, bold: bool = False) -> None:
@@ -167,16 +244,28 @@ def add_center_paragraph(document: Document, text: str, font_name: str = "宋体
     paragraph.paragraph_format.first_line_indent = None
     paragraph.paragraph_format.space_before = Pt(3)
     paragraph.paragraph_format.space_after = Pt(5)
-    run = paragraph.add_run(clean_inline_markdown(text))
-    apply_run_font(run, font_name, size, bold)
+    _add_runs_with_inline_formula(paragraph, text, font_name, size, bold)
+
+
+def add_block_formula(document: Document, latex: str) -> None:
+    """块级公式：居中无缩进段落 + Word 原生 OMML。"""
+    latex = latex.strip()
+    paragraph = document.add_paragraph()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    paragraph.paragraph_format.first_line_indent = None
+    paragraph.paragraph_format.space_before = Pt(6)
+    paragraph.paragraph_format.space_after = Pt(6)
+    if not _append_omml(paragraph, latex):
+        # 兜底：纯文本（非 OMML），至少不丢内容
+        run = paragraph.add_run(latex)
+        apply_run_font(run, "Cambria Math", 10.5)
 
 
 def add_heading(document: Document, text: str, level: int) -> None:
     level = max(1, min(level, 3))
-    paragraph = document.add_heading(clean_inline_markdown(text), level=level)
+    paragraph = document.add_heading("", level=level)
     paragraph.paragraph_format.first_line_indent = None
-    for run in paragraph.runs:
-        apply_run_font(run, "黑体", {1: 15, 2: 13, 3: 12}[level], True)
+    _add_runs_with_inline_formula(paragraph, text, "黑体", {1: 15, 2: 13, 3: 12}[level], True)
 
 
 def add_code_block(document: Document, code: str) -> None:
@@ -220,18 +309,18 @@ def add_table_from_rows(document: Document, rows: list[list[str]], caption: str 
         for col_idx in range(col_count):
             cell = table.cell(row_idx, col_idx)
             value = row[col_idx] if col_idx < len(row) else ""
-            cell.text = clean_inline_markdown(value)
             cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             set_cell_borders(cell)
             set_cell_margin(cell)
             if row_idx == 0:
                 set_cell_shading(cell, "F2F2F2")
-            for paragraph in cell.paragraphs:
-                paragraph.paragraph_format.first_line_indent = None
-                paragraph.paragraph_format.space_after = Pt(0)
-                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER if len(value) <= 16 else WD_ALIGN_PARAGRAPH.LEFT
-                for run in paragraph.runs:
-                    apply_run_font(run, "宋体", 9, row_idx == 0)
+            # 用 cell 默认空 paragraph 注入含公式切分的 runs
+            # （不用 cell.text=... ，那会预填 run 并触发 clean_inline_markdown 破坏公式）
+            cell_para = cell.paragraphs[0]
+            cell_para.paragraph_format.first_line_indent = None
+            cell_para.paragraph_format.space_after = Pt(0)
+            cell_para.alignment = WD_ALIGN_PARAGRAPH.CENTER if len(value) <= 16 else WD_ALIGN_PARAGRAPH.LEFT
+            _add_runs_with_inline_formula(cell_para, value, "宋体", 9, row_idx == 0)
     document.add_paragraph()
 
 
@@ -346,14 +435,21 @@ def render_markdown(document: Document, text: str, table_lookup: dict[str, dict[
             idx += 1
             continue
 
+        # 多行块级公式：$$ 单独成行 → 收集到下一个 $$ 为止
         if stripped == "$$":
             if in_formula:
-                add_center_paragraph(document, "\n".join(formula_lines), font_name="Cambria Math", size=10.5)
+                add_block_formula(document, "\n".join(formula_lines))
                 formula_lines = []
                 in_formula = False
             else:
                 in_formula = True
                 formula_lines = []
+            idx += 1
+            continue
+        # 单行块级公式 $$...$$（源稿主要用这种）
+        single_block = re.fullmatch(r"\$\$(.+)\$\$", stripped)
+        if single_block:
+            add_block_formula(document, single_block.group(1))
             idx += 1
             continue
         if in_formula:
@@ -419,8 +515,9 @@ def render_markdown(document: Document, text: str, table_lookup: dict[str, dict[
             paragraph = document.add_paragraph(style=None)
             paragraph.paragraph_format.left_indent = Cm(0.74)
             paragraph.paragraph_format.first_line_indent = Cm(-0.25)
-            run = paragraph.add_run("• " + clean_inline_markdown(list_item.group(1)))
-            apply_run_font(run, "宋体", 10.5)
+            bullet_run = paragraph.add_run("• ")
+            apply_run_font(bullet_run, "宋体", 10.5)
+            _add_runs_with_inline_formula(paragraph, list_item.group(1), "宋体", 10.5, False)
             idx += 1
             continue
 
@@ -431,7 +528,7 @@ def render_markdown(document: Document, text: str, table_lookup: dict[str, dict[
         add_code_block(document, "\n".join(code_lines))
         stats["code_blocks"] += 1
     if formula_lines:
-        add_center_paragraph(document, "\n".join(formula_lines), font_name="Cambria Math", size=10.5)
+        add_block_formula(document, "\n".join(formula_lines))
     return stats
 
 

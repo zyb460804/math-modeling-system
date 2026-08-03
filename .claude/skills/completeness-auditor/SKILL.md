@@ -1,6 +1,6 @@
 ---
 name: completeness-auditor
-description: "独立完整性审计：检查所有审查文件、审计报告、代码审查是否存在且质量达标。三审计层第二层。"
+description: "独立完整性审计：检查所有审查文件、审计报告、代码审查是否存在且质量达标。三审计层第二层。触发词：完整性审计、completeness audit、审查文件齐全、产物齐全检查、完整性检查。"
 license: MIT
 ---
 

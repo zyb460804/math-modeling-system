@@ -1,6 +1,6 @@
 ---
 name: matlab-model-code-generator
-description: Generate executable MATLAB or Beita Tianyuan compatible modeling code from a validated method plan and cleaned data.
+description: "Generate executable MATLAB or Beita Tianyuan compatible modeling code from a validated method plan and cleaned data. 触发词：生成matlab代码、matlab code gen、北太天元代码生成、.m代码生成、matlab建模代码、生成.m脚本。"
 license: MIT
 ---
 

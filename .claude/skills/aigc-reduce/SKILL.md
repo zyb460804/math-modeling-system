@@ -6,7 +6,8 @@ description: >
   确定性替换、句子级重构和 Anti-AI 审计，在保持学术语体、事实、数据、
   引用和专业术语一致的前提下减少模板化 AI 痕迹。Use when 用户要求降 AI 味、
   降低 AIGC 率、去 AI 检测、降低 AI 查重误判、让论文更像人写的，或提到
-  “去 AI 味”“降重”“AIGC 查重”。
+  “去 AI 味””降重””AIGC 查重”。
+  触发词：降AI味、降重、去AI检测、AIGC查重、aigc reduce、论文降重、AI痕迹消除。
 ---
 
 # AIGC 降重 Skill

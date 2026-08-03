@@ -1,6 +1,6 @@
 ---
 name: robustness-checker
-description: Design and run robustness, sensitivity, error, and baseline comparison checks.
+description: "Design and run robustness, sensitivity, error, and baseline comparison checks. Triggers: 鲁棒性检验、robustness check、灵敏度分析、敏感性分析、误差分析、基线对比、稳定性检验、参数扰动、稳健性检查。"
 license: MIT
 ---
 

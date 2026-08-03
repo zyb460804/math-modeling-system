@@ -10,6 +10,7 @@ description: |
   Use when the user asks to: 降低AI率、人工润色、降低AIGC、humanize、
   去AI味、学术写作润色、论文降重、AIGC检测、AI痕迹消除、降低论文AI率、
   去除AI写作痕迹、学术文本人工化处理。
+  触发词：降AI味、降重、去AI检测、AIGC检测、humanizer、中文降AI、学术降重、AI痕迹消除、降低AI率。
 ---
 
 # Humanizer-ZH-Academic：中文学术写作去AI味指南

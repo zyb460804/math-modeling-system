@@ -1,6 +1,6 @@
 ---
 name: docx-editor-cn
-description: 中文学术 Word 编辑器。两条能力：(1) LaTeX 公式 → Word 原生 OMML 公式（temml→MathML→docx 链）；(2) 已有 .docx 的 XML 级局部编辑（unpack/pack/validate）。补 paper-formal-writer 不具备的"局部改 Word"和"原生公式注入"能力。
+description: 中文学术 Word 编辑器。两条能力：(1) LaTeX 公式 → Word 原生 OMML 公式（temml→MathML→docx 链）；(2) 已有 .docx 的 XML 级局部编辑（unpack/pack/validate）。补 paper-formal-writer 不具备的"局部改 Word"和"原生公式注入"能力。触发词：编辑Word、改Word公式、局部修改docx、LaTeX公式转Word原生、三线表、docx解包、OMML注入。
 tools: Read, Write, Edit, Bash, Glob
 ---
 

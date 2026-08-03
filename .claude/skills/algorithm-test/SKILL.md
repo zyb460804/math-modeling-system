@@ -1,6 +1,6 @@
 ---
 name: algorithm-test
-description: 运行Python代码、语法检查、错误捕获
+description: "运行Python代码、语法检查、错误捕获。触发词：跑代码、运行python、代码测试、语法检查、algorithm test、执行py、code test、跑脚本。"
 ---
 
 # /algorithm-test — 运行并验证 Python 算法代码

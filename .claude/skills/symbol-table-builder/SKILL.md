@@ -1,6 +1,6 @@
 ---
 name: symbol-table-builder
-description: Build and maintain a unified global symbol table for all subquestions, ensuring consistent notation across the entire mathematical modeling solution.
+description: "Build and maintain a unified global symbol table for all subquestions, ensuring consistent notation across the entire mathematical modeling solution. Triggers: 构建符号表、symbol table、符号统一、符号冲突检查、统一记号、全局符号表、符号一致性、build symbol table。"
 license: MIT
 ---
 

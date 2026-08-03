@@ -1,6 +1,6 @@
 ---
 name: latex-renderer
-description: LaTeX 公式渲染器。将 LaTeX 公式转为 PNG 图片嵌入 Word，或生成公式编号清单。
+description: LaTeX 公式渲染器。将 LaTeX 公式转为 PNG 图片嵌入 Word，或生成公式编号清单。触发词：渲染公式、LaTeX转图片、latex render、公式渲染、公式PNG、LaTeX公式编译。
 tools: Read, Write, Edit, Bash, Glob
 ---
 

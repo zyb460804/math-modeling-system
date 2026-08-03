@@ -1,6 +1,6 @@
 ---
 name: algorithm-runner
-description: 一键运行算法模板：匹配算法名→适配数据→执行→输出结果JSON。扫描 resources/04_代码模板/ 自动执行。
+description: 一键运行算法模板：匹配算法名→适配数据→执行→输出结果JSON。扫描 resources/04_代码模板/ 自动执行。触发词：运行算法、执行代码、跑算法、algorithm runner、算法执行、跑模板、一键运行。
 disable-model-invocation: true
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: model-selector
-description: "输入题型关键词，输出推荐模型+算法+风险评估+代码模板路径+PoC验证。基于 outputs/method_matching.md 和 outputs/model_selection_quick_table.md 智能路由。每个候选方法必须附带≤30行PoC代码在真实数据上运行。"
+description: "输入题型关键词，输出推荐模型+算法+风险评估+代码模板路径+PoC验证。基于 outputs/method_matching.md 和 outputs/model_selection_quick_table.md 智能路由。每个候选方法必须附带≤30行PoC代码在真实数据上运行。触发词：智能选模、模型选择器、model selector、选模路由、方法匹配、PoC验证、模型推荐。"
 disable-model-invocation: true
 ---
 

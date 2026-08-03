@@ -1,6 +1,6 @@
 ---
 name: decision-logger
-description: "决策日志记录器：记录用户在选模、结果判断等关键节点的决策理由，确保可追溯。"
+description: "决策日志记录器：记录用户在选模、结果判断等关键节点的决策理由，确保可追溯。触发词：记录决策、决策日志、decision log、选模理由、结果确认理由、G2.5、G4.5、决策追溯。"
 license: MIT
 ---
 

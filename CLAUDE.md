@@ -1,7 +1,8 @@
 # CLAUDE.md — 数学建模竞赛生产系统
 
-> **版本：v4.8 | 更新：2026-08-02**
-> **v4.0→v4.8 全演进一览**：`paper_output/research/CHANGELOG.md`（一眼看全 8 轮演进的定位/来源/新增/报告）
+> **版本：v4.9 | 更新：2026-08-03**
+> **v4.0→v4.9 全演进一览**：`paper_output/research/CHANGELOG.md`（一眼看全 9 轮演进的定位/来源/新增/报告）
+> **v4.9 变更摘要：** 用户偏好固化——**championship 模式设为默认**（v4.1 原按 deadline 自动推荐）。每次解题默认走 3 座盲评 Panel + figqa 碰撞门 + 4 层反馈 L1-L4，不再自动降级；escape hatch 保留（"切 fast"/"这次用 standard"才偏离）。`paper-workflow-orchestrator/SKILL.md` 运行模式段重写 + CLAUDE.md 7 处同步。**同期 P0 修复**：`format_formal_docx.py` 公式渲染链重写（跨 skill 复用 `docx-editor-cn/formula.py::latex_to_omml`，480 个 `$...$`/`$$...$$` 全转 Word 原生 OMML，覆盖 body/center/heading/list/表格 cell 5 路径）+ `resolve_path` 多候选路径查找（修复图片路径解析，6 张图全嵌入）+ `figure_index.json`/`tasks.json` 补齐（证据门禁 PASS）。
 > **v4.8 变更摘要：** 第四档 skill 大扫除——"能转化的转化，不能的删除"。**归档 14 个 skill** 到 `.claude/skills/_archive/`（9 Nature + academic-paper-strategist/composer/defense-pptx + csv-data-summarizer + result-validator）。**方法论精华 100% 消化**：6 份新 references 文档（ai-traffic-light / english-academic-writing / figure-evidence-layering / bilingual-reader-protocol / multi-source-search / result-validation-rules）+ quick-eda-protocol + 1 个新 references 整合 csv 能力。**新建 1 个 skill**：`defense-ppt-builder-zh`（国赛中文答辩 PPT 生成器，融合 nature-paper2ppt + academic-defense-pptx）。**G5 门禁矩阵升级** v1.1（skill_applicability_matrix.json 含 archived_skills 清单 + 知识资产阶段映射新增 v4.8 文档）。**settings.json 精简**（删 14 个注册 + 添 defense-ppt-builder-zh + blind-panel）。skill 总数 67→54，第四档"几乎不触发"从 16 个→2 个（typst-renderer + docx-editor-cn 保留为可选交付链路）。源仓库 `nature-skills/` 完整保留。详见 `outputs/nature_skills_bridge.md` v3.0。
 > **v4.6 变更摘要：** 学术级方法论融合——`usail-hkust/LLM-MM-Agent`（NeurIPS 2025，MCM/ICM 2025 Finalist 前 2% 的建模副驾驶）。**HMML 分层建模方法库**（model-selector/references/hmml/）：5 domain / 18 subdomain / 97 method node 三层知识树（OR / Optimization / ML / Prediction / Evaluation），原样移植 180KB JSON + 162KB MD，选模从"场景→算法"升级为"问题→domain→subdomain→method"分层检索，与 model-selection-matrix（95+场景直查）互补。**actor-critic 选模算法指南**（hmml-retrieval-guide.md）：MethodScorer 自顶向下逐层打分（叶子 final_score = 父路径均分×0.5 + 自身分×0.5），LLM 批判 + embedding 相似双模式。**美赛题型分题策略**（problem-doc-model-selector/references/mcm-decompose-strategy.json+md）：A-F 六题型 × 3/4/5 子任务数的分题原则 + decompose→refine 两步流程，与 analyze skill 的 sub_problems 衔接。**scikit-opt 启发式算法桥接**（model-code-and-result-generator/references/heuristic-algo-scikit-opt.md）：7 种群体智能算法（DE/GA/PSO/SA/ACA/IA/AFSA）一行调用 + 与 cookbook-optimization 手写版的分工。共 8 新建 + 3 SKILL.md 修改，外科手术式增量不改骨架。详见 `paper_output/research/CHANGELOG.md`。
 > **v4.5 变更摘要：** 全面体检 + 断链清零（8 维度多智能体审计 37 条发现 → 全部处置）。**P0 修复**：`render_check.py` 编译期 SyntaxError（global 先用后声明）→ 图表质量门禁（figure/s6/all 阶段）自 v3.6 以来首次真正可用，CLI 文档同步为子命令写法。**断链清零**：8 个社区 skill 的 11 个"文档引用但从未落地"脚本全部实现并冒烟通过（citation-tracer 2 / style-calibration 2 / academic-paper-composer 2 / academic-paper-strategist 2 / ai-failure-checker 1 / algorithm-benchmark 1 / feature-engineering preprocess 1），4 个错位 references/ 文件归位。**QA 去硬编码**：4 个门禁脚本（parameter/result/sensitivity/baseline）的旧赛题硬编码外置到 `paper_output/plan/qa_config.json`（schema 示例见 `quality-assurance-auditor/references/qa_config.example.json`），缺配置显式 SKIP 消灭假绿灯；另 3 个脚本补 argparse（--help 不再触发主逻辑写报告）。**RAG 修复**：papers.csv 2 行残留空格路径修正（`mmqa split` 再生成链路解阻）、nodes jsonl 重生成 6910→6863 与索引对齐、requirements.txt 对齐实际 5 依赖。**环境补齐**：docx-editor-cn npm install（docx/fast-xml-parser/temml）+ pandoc 3.10 → Word 原生公式链全线可用；MiKTeX/pix2text 未装（LaTeX 编译与公式 OCR 分支需先装）。**文档一致性**：CLAUDE.md 10 处失实修正（01_真题与附件、MASTER_PROMPT 位置、skill 计数 7→8/16→13、G4.6 路径、目录树补录等）。**清理**：16 个 .DS_Store/Thumbs.db、7 个空占位目录、tools/README 对齐实际；resources 约 32.8GB 完整重复（03 合集副本 + 嵌套拷贝）已全量校验实锤，删除命令备于 `resources/03_方法算法/README_国赛C题合集已去重.md` 待手动执行。统一验证：130 py 编译 0 失败 / 16 必需文件全在 / 13 关键脚本 --help 全过。
@@ -47,6 +48,24 @@ cd .claude/skills/award-paper-rag
 python -m scripts.mmqa split --out-text-nodes-jsonl data/nodes/text_nodes.block.jsonl  # 再生成（改 papers.csv 后）
 # 验证三者一致：papers.csv 行数 == md 语料数 == jsonl 节点数 == 6863
 ```
+
+### 流水线调度（v4.9 pipeline_runner — 一键推进）
+
+> **脚本环节自动跑，认知环节 Agent 接力**。把 orchestrator 的路由逻辑代码化，防止 Agent 凭记忆跳过门禁。
+
+```bash
+python tools/quality_gate/pipeline_runner.py init              # 初始化流水线（9 阶段状态机）
+python tools/quality_gate/pipeline_runner.py status            # 看当前进度
+python tools/quality_gate/pipeline_runner.py                   # 推进到下一个接力点（默认）
+python tools/quality_gate/pipeline_runner.py --stage S5_evidence_gate  # 只跑指定阶段
+```
+
+- **脚本型阶段**（S3b 自证 / S5 证据门 / S7 格式门 / S8 终检）：runner 自动 subprocess 跑，PASS 才推进，FAIL 停下报修复指引
+- **认知型阶段**（S1 审题 / S2 选模 / S3 代码 / S4 结果 / S6 写作）：runner 输出 AGENT_HANDOFF（调哪些 skill + 产出什么文件），退出码 2 等 Agent 完成后重跑
+- **产出齐备的 agent 阶段自动推进**（不重复 handoff）—— runner 检查 produces 文件存在性判断 Agent 是否已完成
+- **状态文件**：`paper_output/state/pipeline.json`（兼容 pipeline_manager.py，可并用）
+
+退出码：0=推进完成 / 1=门禁 FAIL / 2=到 Agent 接力点
 
 ### Git 流程（仓库已发布到 GitHub）
 
@@ -117,7 +136,8 @@ git push                                       # 远程已设 origin/main，无�
 | `submit` | 生成提交包 | 最终比赛提交包（自动判断阶段；输出末节说明与 solution-package-builder 的区别） |
 | AIGC降重 | 降AI味、降重、去AI检测 | 默认走 humanizer-zh-academic（14种AI模式+7项硬约束）；备选 aigc-reduce |
 | `blind-panel`（v4.1） | 盲评、盲审、模拟评委、校准打分、panel | 3 座独立盲评 + 20 分冲突仲裁 + 真实稀缺性校准（修正自评虚高） |
-| 模式切换（v4.1） | 升级到 championship、切到 fast | orchestrator 模式切换（fast/standard/championship，按 deadline 自动推荐） |
+| 模式切换（v4.9 默认 championship） | 切 fast / 这次用 standard / 切回默认 | orchestrator 模式切换（默认 championship，escape hatch 见 orchestrator SKILL.md） |
+| 流水线推进 / 自动跑门禁 / pipeline | 跑流水线、推进阶段、一键跑门禁 | `tools/quality_gate/pipeline_runner.py`（v4.9）→ 脚本环节自动跑，认知环节输出 AGENT_HANDOFF |
 | L2 回检（v4.1） | 做 L2 回检、跨阶段一致性检查 | qa-auditor 反馈层 L2：定向回滚不重做整阶段 |
 
 > **唯一例外**：用户明确说"只要总分，不要分析"时，评审才输出精简版。
@@ -127,7 +147,7 @@ git push                                       # 远程已设 origin/main，无�
 ```
 读题 → 拆题 → 模型路线 → 判断附件性质 → 生成/修改赛题专用代码 → 运行代码
 → 真实图表/表格/结果 → 证据门禁 → 正式 outline → Agent 全局写作
-→ Word 排版 → 格式门禁 → 最终 QA →（championship）盲评 Panel + figqa 碰撞门
+→ Word 排版 → 格式门禁 → 最终 QA → 盲评 Panel + figqa 碰撞门 + 4 层反馈（v4.9 默认 championship）
 ```
 
 ### 10 个 Native Skill 及路由（主轨道核心）
@@ -302,7 +322,7 @@ SciencePlots 2.2.2 / camelot-py 2.0.0 / shap 0.51.0 / optuna 4.9.0 / akshare 1.1
 | 盲评 Panel | `.claude/agents/blind-panel-judge.md` + `.claude/skills/blind-panel/` | 3 座独立盲评 + **20 分冲突仲裁** + 真实稀缺性校准（修正自评虚高）|
 | Per-Qi 加权聚合 | `.claude/agents/paper-reviewer.md` §10 | 多子问题独立评分，只 refine 挂科 Qi |
 | figqa 碰撞门 | `.claude/skills/math-figure/scripts/{figqa.py,pdf_qa.sh,make_contact_sheet.py}` | bbox 零碰撞 + 从编译 PDF 建 contact sheet（自测通过）|
-| 3 模式 | `paper-workflow-orchestrator/SKILL.md` | fast/standard/championship，按 deadline 自动推荐 |
+| 3 模式 | `paper-workflow-orchestrator/SKILL.md` | **默认 championship**（v4.9），escape hatch 可降级 |
 | Friendly Mode | 同上 | 问答式（AskUserQuestion），用户不敲 bash |
 
 #### 触发词新增
@@ -310,7 +330,7 @@ SciencePlots 2.2.2 / camelot-py 2.0.0 / shap 0.51.0 / optuna 4.9.0 / akshare 1.1
 | 触发词 | 路由 |
 |--------|------|
 | 盲评 / 盲审 / 模拟评委 / 校准打分 / panel | `blind-panel` skill（3 座并行）|
-| 升级到 championship / 切到 fast | orchestrator 模式切换 |
+| 切 fast / 这次用 standard / 切回默认 | orchestrator 模式切换（v4.9 默认 championship） |
 | 做 L2 回检 / 跨阶段一致性检查 | qa-auditor L2 层 |
 
 #### 验证状态
@@ -447,7 +467,7 @@ python .claude/skills/quality-assurance-auditor/scripts/auto_detect_and_fix.py -
 6. **一致性审计**：`consistency-auditor/scripts/audit.py` 通过（三审计层第一层）
 7. **完整性审计**：`completeness-auditor/scripts/audit.py` 通过（三审计层第二层）
 8. 任一未通过 → **不得把 Word 称为最终稿**
-9. **（championship 模式追加）盲评 Panel**：`blind-panel` skill 3 座盲评 PASS + `math-figure/scripts/figqa.py` 图表碰撞门 PASS；用于冲奖稿最终校准（standard 模式可选）
+9. **盲评 Panel + figqa 碰撞门（v4.9 默认开启）**：`blind-panel` skill 3 座盲评 PASS + `math-figure/scripts/figqa.py` 图表碰撞门 PASS；championship 为默认模式，降级到 standard/fast 时此项可省略
 
 ### 三审计层机制（v3.6 新增）
 
@@ -741,7 +761,7 @@ e:\数学建模\
 ```
 预检(problem_files非空) → 题意解析 → 模型路线 → 数据/图表计划
 → 生成赛题专用代码 → 运行真实结果 → 证据门禁 → 正式大纲
-→ Agent全局写作 → Word排版 → 格式门禁 → 最终QA →（championship）盲评Panel + figqa碰撞门
+→ Agent全局写作 → Word排版 → 格式门禁 → 最终QA → 盲评Panel + figqa碰撞门 + 4层反馈（v4.9默认championship）
 ```
 
 ### Prompt 工作流（Legacy 参考）
@@ -810,7 +830,7 @@ e:\数学建模\
 | 完整性审计 / completeness audit | `completeness-auditor` skill → 审查文件/报告/产物齐全检查 |
 | 记录决策 / log decision | `decision-logger` skill → 记录用户在选模/结果判断的决策理由 |
 | 盲评 / 盲审 / 模拟评委 / 校准打分 / panel | `blind-panel` skill（v4.1）→ 3 座独立盲评 + 20 分冲突仲裁 + 真实稀缺性校准 |
-| 升级到 championship / 切到 fast | orchestrator 模式切换（v4.1）→ 启用/关闭 L3+L4+盲评+figqa |
+| 切 fast / 这次用 standard / 切回默认 | orchestrator 模式切换（v4.9 默认 championship）→ escape hatch 降级 |
 | 做 L2 回检 / 跨阶段一致性检查 | qa-auditor 反馈层 L2（v4.1）→ 定向回滚不重做整阶段 |
 | 图表碰撞门 / figqa check | `math-figure/scripts/figqa.py`（v4.1）→ bbox 零碰撞 + 从编译 PDF 建 contact sheet |
 | **Typst 渲染** / 编译 Typst / 用 Typst 排版 | `typst-renderer` skill（v4.2）→ 34 套赛事模板选型 + md→typst 注入 + 编译 PDF（3 次重试） |

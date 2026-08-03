@@ -1,6 +1,6 @@
 ---
 name: context-memory-keeper
-description: "Manages persistent memory with 3-layer architecture (Working/Short-term/Long-term) and knowledge graph integration. Inspired by GBrain memory layering + Karpathy cross-referencing."
+description: "Manages persistent memory with 3-layer architecture (Working/Short-term/Long-term) and knowledge graph integration. Inspired by GBrain memory layer + Karpathy cross-referencing. 触发词：记忆架构、memory keeper、三层记忆、知识图谱、工作记忆、长期记忆、上下文记忆、记忆管理。"
 ---
 
 # Context Memory Keeper v2.0

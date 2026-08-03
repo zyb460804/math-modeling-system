@@ -1,6 +1,6 @@
 ---
 name: interactive-chart
-description: 用 Plotly 生成交互式科学图表：3D曲面、平行坐标、动态时间线、等高线图。导出 HTML 可嵌入答辩。
+description: 用 Plotly 生成交互式科学图表：3D曲面、平行坐标、动态时间线、等高线图。导出 HTML 可嵌入答辩。触发词：交互图表、interactive chart、Plotly、3D曲面、动态图表、交互可视化、HTML图表。
 ---
 
 # Interactive Chart — 交互式图表生成器

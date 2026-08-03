@@ -1,6 +1,6 @@
 ---
 name: network-graph
-description: 图论/网络可视化：最短路径高亮、社区检测着色、交互式网络图（PyVis）、出版级静态图（NetworkX）。
+description: 图论/网络可视化：最短路径高亮、社区检测着色、交互式网络图（PyVis）、出版级静态图（NetworkX）。触发词：网络图、关系图、图论可视化、最短路径、社区检测、network graph、PyVis、网络分析。
 ---
 
 # Network Graph — 网络/图论可视化

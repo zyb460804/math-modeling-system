@@ -1,6 +1,6 @@
 ---
 name: ai-failure-checker
-description: "AI失败模式检查：检测AI生成内容中的常见失败模式，防止编造、幻觉、逻辑错误。参考 academic-research-skills 的7-mode blocking checklist。"
+description: "AI失败模式检查：检测AI生成内容中的常见失败模式，防止编造、幻觉、逻辑错误。参考 academic-research-skills 的7-mode blocking checklist。触发词：AI失败模式检查、AI failure check、检查编造、检查幻觉、检查逻辑错误、7-mode checklist、防AI编造、blocking checklist。"
 ---
 
 # AI失败模式检查（AI Failure Checker）

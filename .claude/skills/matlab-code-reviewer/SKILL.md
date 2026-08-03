@@ -1,6 +1,6 @@
 ---
 name: matlab-code-reviewer
-description: Review, debug, and verify MATLAB or Beita Tianyuan compatible modeling code against the validated method plan and expected artifacts.
+description: "Review, debug, and verify MATLAB or Beita Tianyuan compatible modeling code against the validated method plan and expected artifacts. Triggers: 审查MATLAB代码、matlab review、北太天元代码审查、matlab代码审查、检查.m脚本、matlab debug、.m代码质量、matlab代码验证。"
 license: MIT
 ---
 

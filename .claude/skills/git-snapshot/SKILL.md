@@ -1,6 +1,6 @@
 ---
 name: git-snapshot
-description: 创建项目时间点快照，保留最近10个版本
+description: "创建项目时间点快照，保留最近10个版本。触发词：git快照、项目快照、snapshot、版本快照、时间点快照、打快照。"
 ---
 
 # /git-snapshot — 项目快照与版本保护

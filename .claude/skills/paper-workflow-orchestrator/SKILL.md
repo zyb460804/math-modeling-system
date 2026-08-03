@@ -82,30 +82,31 @@ python .claude/skills/paper-workflow-orchestrator/scripts/workflow_guard.py --st
 
 ## 运行模式（fast / standard / championship）（v4.1 融合自 handsomeZR/mathmodel-skill）
 
-> 本项目原流程无节奏控制。融合 mathmodel-skill 的 3 模式后，按 deadline 距离自动推荐模式，控制反馈层深度与 token 预算。模式与竞赛正交。
+> **v4.9 默认升级**：用户偏好固化——**每次解题默认走 championship 模式**（3 座盲评 Panel + figqa 碰撞门 + 4 层反馈 L1-L4）。不再按 deadline 自动降级到 standard。原 v4.1 "按 deadline 自动推荐" 逻辑保留为 fallback：仅在 deadline 紧迫（<6h）且盲评可能跑不完时，向用户**建议**降级，用户确认才改。
+>
+> 本项目原流程无节奏控制。融合 mathmodel-skill 的 3 模式后，控制反馈层深度与 token 预算。模式与竞赛正交。
 
 | 模式 | 上下文策略 | 反馈层 | 用途 |
 |---|---|---|---|
-| **fast** | 只保留当前阻断项与最小证据 | L1 单次 | 选题试跑 / sanity check / 剩余时间紧 |
-| **standard** | 按阶段加载并保留决策摘要 | L1 + L2 | 默认主流程 |
-| **championship** | 终审阶段扩展证据与独立视角 | L1 + L2 + L3 + L4 + 盲评 Panel | 提交前最后冲刺、冲奖 |
+| **championship** | 终审阶段扩展证据与独立视角 | L1 + L2 + L3 + L4 + 盲评 Panel | **★ 默认主流程**（v4.9），冲奖导向 |
+| **standard** | 按阶段加载并保留决策摘要 | L1 + L2 | 降级备选（用户显式要求时）|
+| **fast** | 只保留当前阻断项与最小证据 | L1 单次 | 选题试跑 / sanity check / 用户显式要求 |
 
-### 自动推荐（按距 deadline 剩余）
-- \> 60h：standard（最后 6h 升 championship）
-- 24–60h：standard
-- 6–24h：fast 关键阶段 + championship 终审
-- < 6h：直接进最终 QA + championship 终审
+### 自动推荐（v4.9 起：默认 championship，不自动降级）
+- 默认：**championship**（任何 deadline）
+- 仅在 deadline <6h 且盲评可能跑不完时，向用户**建议**降级（championship → standard），用户确认才改
+- escape hatch：用户说"切 fast" / "这次用 standard" / "降级" → 才偏离 championship
+- 用户说"升级到 championship" / "切回默认" → 回到 championship
 
 ### 启用方式
-- 写入 `paper_output/plan/mode.json`：`{"mode":"standard","deadline":"<ISO>","reason":"..."}`
-- 用户可手动覆盖："切到 fast" / "升级到 championship"
+- 写入 `paper_output/plan/mode.json`：`{"mode":"championship","deadline":"<ISO>","reason":"v4.9 default"}`（除非用户显式要求降级）
 - 模式变化写入 `paper_output/qa/events.log`；**不静默切换**，不可观测 token 时消耗记为 null 不估算
-- 上下文压力或时间不足时，向用户建议降级（championship → standard → fast），确认后才改
+- 上下文压力或时间不足时，向用户建议降级（championship → standard），**确认后才改**——不得擅自降级
 
 ### 各模式触发的额外 skill
+- championship（默认）：启用 L1 精修 + L2 回检 + L3 `blind-panel`（3 座盲评）+ L4 证据校准 + `math-figure/figqa` 碰撞门 + `math-figure/pdf_qa` 编译 PDF 检查
+- standard：启用 L1 精修 + L2 回检
 - fast：关闭微单元迭代、关闭 L2/L3/L4
-- standard：启用 L1 精修 + L2 回检（默认）
-- championship：额外启用 `blind-panel`（3 座盲评）+ L4 证据校准 + `math-figure/figqa` 碰撞门 + `math-figure/pdf_qa` 编译 PDF 检查
 
 ## Friendly Mode（问答式优先）（v4.1 融合自 handsomeZR/mathmodel-skill）
 

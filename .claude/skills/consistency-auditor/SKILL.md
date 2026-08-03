@@ -1,6 +1,6 @@
 ---
 name: consistency-auditor
-description: "独立一致性审计：检查论文数字、文件名、符号与frozen_numbers.json和代码输出的交叉一致性。三审计层第一层。"
+description: "独立一致性审计：检查论文数字、文件名、符号与frozen_numbers.json和代码输出的交叉一致性。三审计层第一层。触发词：一致性审计、consistency audit、数字一致性、符号一致性、交叉一致性检查。"
 license: MIT
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: defense-simulator
-description: 模拟答辩评委追问，根据论文内容动态生成问题和评分。基于 outputs/defense_qa_bank.md 和 outputs/defense_followup_chains.md。
+description: 模拟答辩评委追问，根据论文内容动态生成问题和评分。基于 outputs/defense_qa_bank.md 和 outputs/defense_followup_chains.md。触发词：答辩模拟、模拟评委、defense simulator、评委追问、答辩仿真、模拟提问。
 disable-model-invocation: true
 ---
 

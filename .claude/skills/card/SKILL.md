@@ -1,6 +1,6 @@
 ---
 name: card
-description: 逐文件提炼知识卡片
+description: "逐文件提炼知识卡片。触发词：抽卡、知识卡片、逐文件提炼、提炼知识点、card、文件提炼、知识提取。"
 ---
 
 # /card — 抽卡

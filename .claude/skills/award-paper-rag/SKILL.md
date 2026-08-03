@@ -1,6 +1,6 @@
 ---
 name: award-paper-rag
-description: O 奖/优秀论文章节级 RAG 问答引擎。按 Markdown heading 分块（非固定 token），正则状态机识别 13 类章节，支持 年份/题号/章节 多维过滤，跨年趋势对比。直接检索本项目 resources/02_优秀论文/ 的 190+ 篇优秀论文，取代 competition-prep 的模糊匹配。
+description: O 奖/优秀论文章节级 RAG 问答引擎。按 Markdown heading 分块（非固定 token），正则状态机识别 13 类章节，支持 年份/题号/章节 多维过滤，跨年趋势对比。直接检索本项目 resources/02_优秀论文/ 的 190+ 篇优秀论文，取代 competition-prep 的模糊匹配。触发词：查优秀论文、O奖论文检索、章节检索、award paper rag、历年论文、优秀论文RAG、获奖论文。
 tools: Read, Write, Edit, Bash, Glob
 ---
 

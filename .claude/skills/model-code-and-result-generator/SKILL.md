@@ -1,6 +1,6 @@
 ---
 name: model-code-and-result-generator
-description: "根据 model_route.json、数据计划和清洗数据，为数学建模论文生成结果证据契约和 q1/q2/q3 建模代码脚手架。Invoke when 需要把模型输出、评价指标、结构化结论、论文表格和当前赛题专用建模代码沉淀到 paper_output/results/、paper_output/tables/ 和 paper_output/code/modeling/，供 QA 与正文生成读取。"
+description: "根据 model_route.json、数据计划和清洗数据，为数学建模论文生成结果证据契约和 q1/q2/q3 建模代码脚手架。Invoke when 需要把模型输出、评价指标、结构化结论、论文表格和当前赛题专用建模代码沉淀到 paper_output/results/、paper_output/tables/ 和 paper_output/code/modeling/，供 QA 与正文生成读取。触发词：建模代码、模型代码、生成代码、结果契约、model_results、评价指标生成、conclusions、建模脚本。"
 ---
 
 # 建模代码与结果证据生成器

@@ -1,6 +1,6 @@
 ---
 name: word-counter
-description: 论文实时字数统计。追踪中英文字数、图表数、公式数，对标国赛 18000 字要求。
+description: 论文实时字数统计。追踪中英文字数、图表数、公式数，对标国赛 18000 字要求。触发词：字数统计、多少字了、word counter、论文字数、18000字、字数检查。
 tools: Read, Bash, Glob, Grep
 ---
 

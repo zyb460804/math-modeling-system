@@ -1,6 +1,6 @@
 ---
 name: solution-package-builder
-description: Integrate the modeler's final method explanation and the programmer's final result analysis into a single comprehensive writer-facing solution package that the paper writer can directly use to draft paper sections.
+description: "Integrate the modeler's final method explanation and the programmer's final result analysis into a single comprehensive writer-facing solution package that the paper writer can directly use to draft paper sections. Triggers: 准备解决方案包、solution package、写作材料包、整合建模结果、给写手的材料、frozen numbers、写作中间包。"
 license: MIT
 ---
 

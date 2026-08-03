@@ -1,6 +1,6 @@
 ---
 name: paper-micro-unit-generator
-description: "基于微单元模板与脚本批量生成并合并论文内容。Invoke when需要按微单元拆分逐单元写作并用 scripts/generate_all_offline.py 与 scripts/merge.py 自动生成论文。"
+description: "基于微单元模板与脚本批量生成并合并论文内容。Invoke when需要按微单元拆分逐单元写作并用 scripts/generate_all_offline.py 与 scripts/merge.py 自动生成论文。触发词：微单元、micro unit、分块写作、逐单元写作、局部扩写、generate_all_offline、单元合并。"
 ---
 
 # 论文微单元批量生成与合并器

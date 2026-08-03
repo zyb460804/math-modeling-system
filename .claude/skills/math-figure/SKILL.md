@@ -1,6 +1,6 @@
 ---
 name: math-figure
-description: "数学建模专用数学图表：函数图像、几何示意图、向量场、概率分布、等高线+3D曲面对照。含render_check质量检查。"
+description: "数学建模专用数学图表：函数图像、几何示意图、向量场、概率分布、等高线+3D曲面对照。含render_check质量检查。触发词：数学图表、函数图、几何示意图、向量场、等高线、3D曲面、math figure、render_check、概率分布。"
 ---
 
 # Math Figure — 数学图表生成器（含render_check）

@@ -1,6 +1,6 @@
 ---
 name: chart-recommender
-description: [内部工具] 根据题型和数据特征推荐最佳图表类型，输出 matplotlib 代码模板。由 /figure 统一入口调度。
+description: "[内部工具] 根据题型和数据特征推荐最佳图表类型，输出 matplotlib 代码模板。由 /figure 统一入口调度。触发词：推荐图表、图表类型推荐、chart recommend、可视化选型、matplotlib图表推荐。"
 disable-model-invocation: true
 ---
 

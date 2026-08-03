@@ -1,6 +1,6 @@
 ---
 name: paper-formal-writer
-description: "国赛数学建模正式论文范式、outline、Word 排版和格式门禁 skill。Invoke when 证据门禁通过后需要生成 CUMCM 风格正式论文、规范标题编号、扩写正文、插入图表表格、导出 Word 或检查论文格式。"
+description: "国赛数学建模正式论文范式、outline、Word 排版和格式门禁 skill。Invoke when 证据门禁通过后需要生成 CUMCM 风格正式论文、规范标题编号、扩写正文、插入图表表格、导出 Word 或检查论文格式。触发词：正式成稿、Word排版、格式门禁、outline、论文写作、CUMCM格式、check_paper_format、导出Word。"
 ---
 
 # 正式论文范式写作器

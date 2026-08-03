@@ -1,6 +1,6 @@
 ---
 name: problem-doc-model-selector
-description: "解析赛题PDF/Word，抽取任务与数据条件并给出模型选型与验证路线。Invoke when用户提供赛题文档或题目文本，需要确定采用何模型/方法。"
+description: "解析赛题PDF/Word，抽取任务与数据条件并给出模型选型与验证路线。Invoke when用户提供赛题文档或题目文本，需要确定采用何模型/方法。触发词：审题、选模、题意解析、题型判断、problem analysis、赛题解析、模型选型、问题重述。"
 ---
 
 # 赛题文档自动解析与模型选型

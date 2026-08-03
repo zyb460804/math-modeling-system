@@ -1,6 +1,6 @@
 ---
 name: citation-tracer
-description: "引用溯源工具：验证引用真实性、追踪引用来源、检查引用完整性。参考 academic-research-skills 设计。"
+description: "引用溯源工具：验证引用真实性、追踪引用来源、检查引用完整性。参考 academic-research-skills 设计。触发词：引用溯源、citation check、引用验证、检查引用、引用完整性、参考文献核对、citation tracer、引用追踪。"
 ---
 
 # 引用溯源工具（Citation Tracer）

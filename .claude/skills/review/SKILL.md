@@ -1,6 +1,6 @@
 ---
 name: review
-description: 全文评分、问题拆解、修改优先级清单。默认输出最深评审报告，委托 paper-reviewer agent 执行。
+description: 全文评分、问题拆解、修改优先级清单。默认输出最深评审报告，委托 paper-reviewer agent 执行。触发词：审论文、打分、严格打分、审稿、评审、深度评审、paper review、论文评分、review my paper。
 ---
 
 # /review — 审论文

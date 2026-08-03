@@ -1,6 +1,6 @@
 ---
 name: feature-engineering
-description: "特征工程标准化流程：数据预处理、数据转换、编码、缩放、特征选择。参考 FinDii/FeatureEngineering 设计。"
+description: "特征工程标准化流程：数据预处理、数据转换、编码、缩放、特征选择。参考 FinDii/FeatureEngineering 设计。触发词：特征工程、feature engineering、数据预处理、特征选择、特征编码、特征缩放、特征构造。"
 ---
 
 # 特征工程（Feature Engineering）

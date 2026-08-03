@@ -1,6 +1,6 @@
 ---
 name: paper-polisher
-description: Polish mathematical modeling paper drafts for grammar, clarity, formula consistency, hedging calibration, overclaim detection, and contest formatting compliance. Use after paper-section-writer has drafted sections.
+description: "Polish mathematical modeling paper drafts for grammar, clarity, formula consistency, hedging calibration, overclaim detection, and contest formatting compliance. Use after paper-section-writer has drafted sections. Triggers: 润色、改写、polish、换个说法、更学术一点、更简洁一点、12点检查、语言润色、公式一致性检查、overclaim检查。"
 license: MIT
 ---
 

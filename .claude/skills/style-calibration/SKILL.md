@@ -1,6 +1,6 @@
 ---
 name: style-calibration
-description: "写作风格校准：从用户过往作品学习写作风格，使生成的论文更符合用户习惯。参考 academic-research-skills 设计。"
+description: "写作风格校准：从用户过往作品学习写作风格，使生成的论文更符合用户习惯。参考 academic-research-skills 设计。触发词：写作风格校准、style calibration、学习写作风格、风格一致性、用户风格匹配、风格学习、文风校准。"
 ---
 
 # 写作风格校准（Style Calibration）

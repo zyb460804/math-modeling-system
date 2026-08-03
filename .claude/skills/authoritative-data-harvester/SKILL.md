@@ -1,6 +1,6 @@
 ---
 name: authoritative-data-harvester
-description: "自动定位并获取权威公开数据（优先API/官方批量下载），输出可复现抓取与清洗方案。Invoke when用户需要权威数据、官方统计、API下载或数据源爬取。"
+description: "自动定位并获取权威公开数据（优先API/官方批量下载），输出可复现抓取与清洗方案。Invoke when用户需要权威数据、官方统计、API下载或数据源爬取。触发词：拉数据、经济数据、akshare、权威数据、数据获取、官方统计、API下载、数据爬取。"
 ---
 
 # 权威数据自动获取（Authoritative Data Harvester）

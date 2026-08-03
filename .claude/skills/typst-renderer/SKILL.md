@@ -1,6 +1,6 @@
 ---
 name: typst-renderer
-description: Typst 论文渲染器。从 17 套赛事模板选型，将 final_paper_source.md 注入 Typst 模板并编译为 PDF，或直接渲染 Typst 公式。与 latex-renderer 并列，为偏好 Typst 排版的赛题提供更快的编译链路。
+description: Typst 论文渲染器。从 17 套赛事模板选型，将 final_paper_source.md 注入 Typst 模板并编译为 PDF，或直接渲染 Typst 公式。与 latex-renderer 并列，为偏好 Typst 排版的赛题提供更快的编译链路。触发词：Typst渲染、编译Typst、用Typst排版、typst renderer、Typst PDF、Typst模板。
 tools: Read, Write, Edit, Bash, Glob
 ---
 

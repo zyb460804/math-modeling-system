@@ -1,6 +1,6 @@
 ---
 name: python-code-reviewer
-description: Review, debug, and verify Python modeling code against the validated method plan and expected artifacts.
+description: "Review, debug, and verify Python modeling code against the validated method plan and expected artifacts. Triggers: 审查python代码、python review、py代码审查、检查.py脚本、python debug、python代码质量、python代码验证。"
 license: MIT
 ---
 

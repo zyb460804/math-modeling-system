@@ -1,6 +1,6 @@
 ---
 name: algorithm-benchmark
-description: "算法基准测试：比较不同算法的性能、精度、速度。参考 szilard/benchm-ml 设计。"
+description: "算法基准测试：比较不同算法的性能、精度、速度。参考 szilard/benchm-ml 设计。触发词：算法基准测试、benchmark、比较算法性能、算法对比、精度速度对比、算法选型对比、多模型对比。"
 ---
 
 # 算法基准测试（Algorithm Benchmark）

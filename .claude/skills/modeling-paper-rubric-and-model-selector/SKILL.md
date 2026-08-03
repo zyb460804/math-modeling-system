@@ -1,6 +1,6 @@
 ---
 name: modeling-paper-rubric-and-model-selector
-description: "按常见评分点生成建模论文结构与写作清单，并根据题目类型与数据条件给出模型选择与对照实验路线。Invoke when需要“论文格式/评分对齐/模型选型/路线不确定”。"
+description: "按常见评分点生成建模论文结构与写作清单，并根据题目类型与数据条件给出模型选择与对照实验路线。Invoke when需要“论文格式/评分对齐/模型选型/路线不确定”。触发词：模型路线、评分闭环、论文格式对齐、rubric、建模评分、路线规划、评分点对齐。"
 ---
 
 # 评分对齐论文结构与模型选型（Paper Rubric & Model Selector）
