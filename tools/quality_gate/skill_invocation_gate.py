@@ -78,6 +78,9 @@ REQUIRED_SKILLS = [
         "expected_file": "qa/humanizer_report.json",
         "check": "json_score",
         "json_path": ["score"],
+        # TODO(阈值口径待统一, H-12): 此处 min_value=40，而 pipeline_runner.py 的
+        # S6 handoff 与 docs/agent_workflow_standard.md 均写 "≥58/60"。两处口径
+        # 矛盾，本次仅标注，不改动判定语义（保持 40 生效，待统一后一并调整）。
         "min_value": 40,
         "max_value": 60,
         "how_to_fix": "调 humanizer-zh-academic skill（Skill 工具）对 final_paper_source.md 做 14 种 AI 模式扫描+60 分制评分，产出 humanizer_report.json（含 score 字段）",
@@ -162,14 +165,25 @@ def check_one(item: dict, paper_dir: Path) -> tuple[str, str]:
             return "FAIL", f"标题数 {n} < {item['min_headings']}（内容不完整）"
         return "PASS", f"{n} 个问答标题"
     if check == "json_count":
+        # H-12 修复：原实现 isinstance(val, list) 才查——int 3、非空 dict 等
+        # 非列表真值恒 PASS（假绿灯）。新语义：
+        #   空列表 / 0 / None / False / "" / {} → 视为 0 项 blocking（PASS）
+        #   非列表真值（int 3、非空 dict、非空 str 等）→ FAIL（形态可疑即视存在 blocking）
         try:
             data = json.loads(fpath.read_text(encoding="utf-8"))
             val = data
             for key in item["json_path"]:
                 val = val[key]
-            if isinstance(val, list) and len(val) > item["max_count"]:
-                return "FAIL", f"blocking 数 {len(val)} > {item['max_count']}：{val[:3]}"
-            return "PASS", f"blocking={len(val) if isinstance(val, list) else val}"
+            if isinstance(val, list):
+                count = len(val)
+            elif not val:  # None / 0 / False / "" / {} / 0.0 等 falsy → 0 项
+                count = 0
+            else:  # 非列表真值：int 3、非空 dict 等 → 形态可疑
+                count = None
+            if count is None or count > item["max_count"]:
+                return "FAIL", (f"blocking={val!r} 超出上限 {item['max_count']} "
+                                f"或为非列表真值（int/dict/非空 str 均视为存在 blocking）")
+            return "PASS", f"blocking={count}"
         except Exception as e:
             return "FAIL", f"JSON 解析失败：{e}"
     if check == "contains_all":

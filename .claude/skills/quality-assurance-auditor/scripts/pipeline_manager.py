@@ -85,6 +85,22 @@ STATUS_SYMBOLS: dict[str, str] = {
 # 注入防护：防止用户/AI 在状态文件中伪造控制标记
 _INJECTION_PATTERNS = ["[APPROVED]", "[REWORK]", "[MANUAL_SPEC]"]
 
+# ── HIL 审批标记（CR-6 修复）──────────────────────────────────
+# 批准/返工标记必须独占一行：该行 strip 后恰好等于下列标记之一
+# （行内不得含反引号或任何其它字符）。模板占位符改用全角【APPROVED】，
+# 模板说明文字中不再出现可与匹配规则命中的半角 [APPROVED] 子串，
+# 防止"全新模板文件天然 APPROVED"的绕过（CR-6）。
+APPROVED_MARKS = ("[APPROVED]", "【APPROVED】")
+REWORK_MARKS = ("[REWORK]", "【REWORK】")
+
+
+def _marker_line_index(content: str, marks: tuple) -> int:
+    """返回第一处"单独一行恰为某标记"的行号（0 起）；无则 -1。"""
+    for i, raw in enumerate(content.splitlines()):
+        if raw.strip() in marks:
+            return i
+    return -1
+
 
 def _sanitize(text: str) -> str:
     """去除可能注入流水线控制标记的内容（[X] → ⟦X⟧）。"""
@@ -195,7 +211,9 @@ def _write_intervention_template(mode: str) -> None:
         f"> **模式**: {mode}\n"
         f"> **说明**: 在各阶段 AI 停下来等待时，在此文件填写审查结果。\n\n"
         f"## 审查结果区\n\n"
-        f"_(AI 停下来时，在此填写 `[APPROVED]` 或 `[REWORK] + 修改意见`)_\n"
+        f"_(AI 停下来时，把下面占位行改成 【APPROVED】（同意）或 【REWORK】（返工，"
+        f"意见写在标记行的下一行起）。标记必须独占一行，行内不得有其它字符。)_\n"
+        f"\n【待填写：APPROVED 或 REWORK】\n"
         f"{manual_spec}",
         encoding="utf-8",
     )
@@ -289,8 +307,8 @@ def cmd_request_review(args: argparse.Namespace) -> None:
 
 请阅读上述报告，然后在 `paper_output/state/human_intervention.md` 中填写：
 
-- 同意继续 → `[APPROVED]`
-- 需要修改 → `[REWORK]`，并在下方写明具体修改意见
+- 同意继续 → 单独一行写 【APPROVED】
+- 需要修改 → 单独一行写 【REWORK】，并在下一行起写明具体修改意见
 
 填写完毕后，在终端输入「**继续**」并按 Enter 唤醒 AI。
 """
@@ -307,23 +325,53 @@ def cmd_request_review(args: argparse.Namespace) -> None:
 
 
 def cmd_check_approval(args: argparse.Namespace) -> str:
+    """行级精确匹配（CR-6）：必须存在单独一行恰为 [APPROVED] 或 【APPROVED】
+    才算批准；反引号包裹的说明文字、行内混排一律不算（防止模板天然放行）。"""
+    verdict, _ = _approval_state()
+    if verdict != "REWORK":
+        print(verdict)
+    return verdict
+
+
+def _approval_state() -> tuple:
+    """读取 HUMAN_FILE 判定审批状态（检测器与消费端共用同一解析器）。
+    返回 (verdict, feedback)，verdict ∈ {APPROVED, REWORK, PENDING}。"""
     if not HUMAN_FILE.exists():
-        print("PENDING")
-        return "PENDING"
+        return "PENDING", ""
     content = HUMAN_FILE.read_text(encoding="utf-8")
-    if "[APPROVED]" in content:
-        print("APPROVED")
-        return "APPROVED"
-    if "[REWORK]" in content:
-        idx = content.rfind("[REWORK]")
-        feedback = content[idx + len("[REWORK]"):].strip()
+    if _marker_line_index(content, APPROVED_MARKS) >= 0:
+        return "APPROVED", ""
+    idx = _marker_line_index(content, REWORK_MARKS)
+    if idx >= 0:
+        lines = content.splitlines()
+        feedback = "\n".join(lines[idx + 1:]).strip()
         print(f"REWORK\n{feedback}")
-        return "REWORK"
-    print("PENDING")
-    return "PENDING"
+        return "REWORK", feedback
+    return "PENDING", ""
+
+
+def _print_approval_guidance(reason: str) -> None:
+    print(
+        f"[pipeline] ✗ advance 被拒绝：{reason}\n"
+        f"  请在 paper_output/state/human_intervention.md 的「审查结果区」单独一行填写：\n"
+        f"      【APPROVED】\n"
+        f"  （标记必须独占一行，行内不得含反引号或其它字符；需要修改则单独一行写 【REWORK】，"
+        f"   并在下一行起写修改意见）\n"
+        f"  然后重新运行: pipeline_manager.py advance <stage>",
+        file=sys.stderr,
+    )
 
 
 def cmd_advance(args: argparse.Namespace) -> None:
+    # CR-6 修复：advance 不再是绕过审批的旁门——推进前必须先通过行级审批检查
+    verdict, _ = _approval_state()
+    if verdict != "APPROVED":
+        reason = {
+            "REWORK": "审查结论为 REWORK（请先按修改意见返工，再重新提交审查）",
+            "PENDING": "未检测到人工批准标记",
+        }.get(verdict, verdict)
+        _print_approval_guidance(reason)
+        sys.exit(1)
     state = load()
     stage = args.stage
     if stage not in state["stages"]:
@@ -348,10 +396,14 @@ def cmd_advance(args: argparse.Namespace) -> None:
             print("[pipeline] 🏁 流水线全部完成！")
     save(state)
 
-    # 清除 APPROVED 标记（count=1 保留历史）
+    # 清除 APPROVED 标记（count=1 保留历史；CR-6：半角/全角标记行均消费为
+    # "[APPROVED — stage @ time]"，该行不再恰好等于任何 APPROVED 标记，不会二次放行）
     if HUMAN_FILE.exists():
         content = HUMAN_FILE.read_text(encoding="utf-8")
-        content = content.replace("[APPROVED]", f"[APPROVED — {stage} @ {now()}]", 1)
+        for mark in APPROVED_MARKS:
+            if _marker_line_index(content, (mark,)) >= 0:
+                content = content.replace(mark, f"[APPROVED — {stage} @ {now()}]", 1)
+                break
         HUMAN_FILE.write_text(content, encoding="utf-8")
 
 
@@ -386,8 +438,13 @@ def cmd_rework(args: argparse.Namespace) -> None:
     print("[pipeline] 请阅读 human_intervention.md 中的修改意见后开始 Rework")
 
     if HUMAN_FILE.exists():
+        # CR-6 补充：与 advance 同口径——半角/全角 REWORK 标记行均消费为
+        # "[REWORK — stage @ time]"，消费后不再等于任何 REWORK 标记
         content = HUMAN_FILE.read_text(encoding="utf-8")
-        content = content.replace("[REWORK]", f"[REWORK — {stage} @ {now()}]", 1)
+        for mark in REWORK_MARKS:
+            if _marker_line_index(content, (mark,)) >= 0:
+                content = content.replace(mark, f"[REWORK — {stage} @ {now()}]", 1)
+                break
         HUMAN_FILE.write_text(content, encoding="utf-8")
 
 
@@ -403,8 +460,8 @@ def cmd_checkpoint_banner(args: argparse.Namespace) -> None:
 ║  请操作：                                                ║
 ║  1. 阅读 paper_output/state/review_request.md            ║
 ║  2. 在 paper_output/state/human_intervention.md 填写意见 ║
-║     • 同意继续  →  写入 [APPROVED]                       ║
-║     • 需要修改  →  写入 [REWORK] + 具体指令              ║
+║     • 同意继续  →  单独一行写入 【APPROVED】             ║
+║     • 需要修改  →  单独一行写入 【REWORK】 + 具体指令    ║
 ║  3. 在终端输入「继续」后按 Enter 唤醒 AI                 ║
 ╚══════════════════════════════════════════════════════════╝
 """

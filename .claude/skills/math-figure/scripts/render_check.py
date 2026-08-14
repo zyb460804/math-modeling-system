@@ -12,6 +12,16 @@
 输出：
     - 控制台报告
     - paper_output/qa/render_check_report.json
+
+三态说明（2026-08 修复 CR-9a“橡皮图章”）：
+    PASS            所有已实现检查全部通过
+    PASS_WITH_SKIP  已实现检查通过，但存在未实现自动检测的检查项（SKIP/N/A）——
+                    总体不得是纯 PASS，属于 WARNING 级：哪些查了、哪些没查必须可见
+    WARN / FAIL / ERROR  同原语义（WARN 及以上仍以 rc=1 结束）
+    font_size / text_overlap / label_clarity（及非 PNG 路径的 text_quality）为 SKIP：
+    本脚本基于成品位图无法可靠测量字号/重叠/清晰度，不再假装 PASS——
+    文字重叠由 math-figure/scripts/figqa.py::assert_no_overlap 碰撞门承接
+    （出图脚本 savefig 前已接线），字号与标签清晰度需人工确认。
 """
 
 import argparse
@@ -43,6 +53,23 @@ QUALITY_STANDARDS = {
     "min_height": 600,          # 最小高度（像素）
     "max_text_overlap_ratio": 0.05,  # 最大文字重叠比例
 }
+
+
+def _aggregate_status(checks: dict) -> str:
+    """聚合单项检查状态为总体状态。
+
+    优先级：FAIL/ERROR > WARN > PASS_WITH_SKIP > PASS。
+    任一检查项为 SKIP/N/A（未实现自动检测或未执行）时，总体不得是纯 PASS，
+    而是 PASS_WITH_SKIP（WARNING 级）：已查的部分通过 + 未查的部分必须可见。
+    """
+    statuses = [c.get("status") for c in checks.values()]
+    if "FAIL" in statuses or "ERROR" in statuses:
+        return "FAIL"
+    if "WARN" in statuses:
+        return "WARN"
+    if any(s in ("SKIP", "N/A") for s in statuses):
+        return "PASS_WITH_SKIP"
+    return "PASS"
 
 
 def check_figure_quality(figure_path: Path) -> dict:
@@ -88,11 +115,11 @@ def check_figure_quality(figure_path: Path) -> dict:
             "height": height
         }
 
-        # 检查文字质量（简化版本）
-        # 实际应用中需要更复杂的OCR或图像分析
+        # 检查文字质量：位图无法可靠测量字号/重叠/清晰度，显式 SKIP（不假装 PASS）
         result["checks"]["text_quality"] = {
-            "status": "PASS",
-            "note": "基础检查通过，建议人工确认文字清晰度"
+            "status": "SKIP",
+            "note": "未实现自动检测：文字重叠由 figqa 碰撞门承接"
+                    "（math-figure/scripts/figqa.py），字号/清晰度需人工确认"
         }
 
         # 检查画布使用
@@ -113,14 +140,8 @@ def check_figure_quality(figure_path: Path) -> dict:
             if white_ratio > 0.8:
                 result["issues"].append("图表有过多空白区域，建议调整布局")
 
-        # 总体状态
-        statuses = [c["status"] for c in result["checks"].values()]
-        if "FAIL" in statuses:
-            result["overall_status"] = "FAIL"
-        elif "WARN" in statuses:
-            result["overall_status"] = "WARN"
-        else:
-            result["overall_status"] = "PASS"
+        # 总体状态（三态聚合：含 SKIP/N/A 时不得是纯 PASS）
+        result["overall_status"] = _aggregate_status(result["checks"])
 
     except ImportError:
         result["checks"]["text_quality"] = {
@@ -169,19 +190,20 @@ def check_matplotlib_figure(figure_path: Path) -> dict:
         img = Image.open(figure_path)
         img_array = np.array(img)
 
-        # 检查字体大小（通过检测小字体区域）
-        # 这是一个简化的检查，实际应用中需要OCR
+        # 检查字体大小：位图无法可靠测量字号，显式 SKIP（不假装 PASS）
         result["checks"]["font_size"] = {
-            "status": "PASS",
+            "status": "SKIP",
             "min_size": QUALITY_STANDARDS["min_font_size"],
-            "note": "建议人工确认最小字体≥6.5pt"
+            "note": "未实现自动检测：最小字号（标准≥6.5pt）需人工确认"
         }
 
-        # 检查文字重叠（通过检测密集像素区域）
+        # 检查文字重叠：由 figqa 碰撞门在出图时承接，此处显式 SKIP
         result["checks"]["text_overlap"] = {
-            "status": "PASS",
+            "status": "SKIP",
             "max_overlap_ratio": QUALITY_STANDARDS["max_text_overlap_ratio"],
-            "note": "建议人工确认无文字重叠"
+            "note": "未实现自动检测：文字重叠由 figqa 碰撞门承接"
+                    "（math-figure/scripts/figqa.py::assert_no_overlap，"
+                    "出图脚本 savefig 前已接线）"
         }
 
         # 检查是否超出画布
@@ -206,20 +228,14 @@ def check_matplotlib_figure(figure_path: Path) -> dict:
         if has_content_at_edge:
             result["issues"].append("图表内容可能超出画布边界")
 
-        # 检查标签清晰度
+        # 检查标签清晰度：位图无法可靠测量，显式 SKIP（不假装 PASS）
         result["checks"]["label_clarity"] = {
-            "status": "PASS",
-            "note": "建议人工确认坐标轴标签和图例清晰可读"
+            "status": "SKIP",
+            "note": "未实现自动检测：坐标轴标签与图例清晰度需人工确认"
         }
 
-        # 总体状态
-        statuses = [c["status"] for c in result["checks"].values()]
-        if "FAIL" in statuses:
-            result["overall_status"] = "FAIL"
-        elif "WARN" in statuses:
-            result["overall_status"] = "WARN"
-        else:
-            result["overall_status"] = "PASS"
+        # 总体状态（三态聚合：含 SKIP/N/A 时不得是纯 PASS）
+        result["overall_status"] = _aggregate_status(result["checks"])
 
     except ImportError:
         result["overall_status"] = "SKIP"
@@ -273,15 +289,27 @@ def check_all_figures(figures_dir: Path) -> dict:
             for issue in results[figure_file.name]["issues"]:
                 print(f"  ⚠️ {issue}")
 
+        # 哪些查了、哪些没查：stdout 可见
+        skipped_checks = [
+            name for name, c in results[figure_file.name]["checks"].items()
+            if c.get("status") in ("SKIP", "N/A")
+        ]
+        if skipped_checks:
+            print(f"  ⏭ 未实现自动检测（SKIP）: {', '.join(skipped_checks)}")
+
     # 统计
     total = len(results)
     passed = sum(1 for r in results.values() if r["overall_status"] == "PASS")
+    pass_with_skip = sum(1 for r in results.values() if r["overall_status"] == "PASS_WITH_SKIP")
+    skipped = sum(1 for r in results.values() if r["overall_status"] == "SKIP")
     warned = sum(1 for r in results.values() if r["overall_status"] == "WARN")
-    failed = sum(1 for r in results.values() if r["overall_status"] in ["FAIL", "ERROR"])
+    failed = sum(1 for r in results.values() if r["overall_status"] in ("FAIL", "ERROR"))
 
     return {
         "total": total,
         "passed": passed,
+        "pass_with_skip": pass_with_skip,
+        "skipped": skipped,
         "warned": warned,
         "failed": failed,
         "results": results
@@ -299,6 +327,8 @@ def generate_report(check_results: dict):
         "summary": {
             "total": check_results["total"],
             "passed": check_results["passed"],
+            "pass_with_skip": check_results.get("pass_with_skip", 0),
+            "skipped": check_results.get("skipped", 0),
             "warned": check_results["warned"],
             "failed": check_results["failed"]
         },
@@ -320,20 +350,34 @@ def generate_report(check_results: dict):
 | 指标 | 数量 |
 |------|------|
 | 总计 | {report['summary']['total']} |
-| 通过 | {report['summary']['passed']} |
+| 通过（纯PASS） | {report['summary']['passed']} |
+| 部分通过（含SKIP，未全部实现自动检测） | {report['summary']['pass_with_skip']} |
+| 整体跳过 | {report['summary']['skipped']} |
 | 警告 | {report['summary']['warned']} |
 | 失败 | {report['summary']['failed']} |
 
 ## 检查结果
 
-| 文件 | 状态 | 问题 |
-|------|------|------|
+| 文件 | 状态 | 问题 | 未检查项（SKIP/N/A） |
+|------|------|------|------|
 """
 
     for filename, result in check_results["results"].items():
-        status_icon = "✅" if result["overall_status"] == "PASS" else "⚠️" if result["overall_status"] == "WARN" else "❌"
+        status = result["overall_status"]
+        if status == "PASS":
+            status_icon = "✅"
+        elif status in ("PASS_WITH_SKIP", "SKIP"):
+            status_icon = "🔶"
+        elif status == "WARN":
+            status_icon = "⚠️"
+        else:
+            status_icon = "❌"
         issues = "; ".join(result["issues"]) if result["issues"] else "-"
-        md_content += f"| {filename} | {status_icon} {result['overall_status']} | {issues} |\n"
+        skipped = ", ".join(
+            name for name, c in result["checks"].items()
+            if c.get("status") in ("SKIP", "N/A")
+        ) or "-"
+        md_content += f"| {filename} | {status_icon} {status} | {issues} | {skipped} |\n"
 
     md_content += """
 ## 质量标准
@@ -350,9 +394,13 @@ def generate_report(check_results: dict):
 
 1. 检查所有WARN和FAIL的图表
 2. 确保坐标轴标签和图例清晰可读
-3. 确保没有文字重叠
+3. 确保没有文字重叠（自动检测由 figqa 碰撞门在出图时承接：math-figure/scripts/figqa.py）
 4. 确保图表内容不超出画布边界
-5. 确保字体大小符合要求
+5. 确保字体大小符合要求（未实现自动检测，需人工确认）
+
+> 说明：PASS_WITH_SKIP = 已实现的检查（分辨率/尺寸/白区/边缘像素）通过，
+> 但 font_size / text_overlap / label_clarity 未实现位图级自动检测（SKIP），
+> 不是纯 PASS——文字重叠请依赖出图时的 figqa 碰撞门，字号与清晰度请人工确认。
 """
 
     md_path.write_text(md_content, encoding="utf-8")
@@ -397,7 +445,7 @@ def main():
             if "note" in check_data:
                 print(f"  {check_data['note']}")
 
-        sys.exit(0 if result["overall_status"] in ["PASS", "SKIP"] else 1)
+        sys.exit(0 if result["overall_status"] in ("PASS", "SKIP", "PASS_WITH_SKIP") else 1)
 
     elif args.command == "check-all":
         figures_dir = Path(args.dir)
@@ -411,7 +459,9 @@ def main():
         generate_report(results)
 
         print(f"\n总计: {results['total']}")
-        print(f"通过: {results['passed']}")
+        print(f"通过（纯PASS）: {results['passed']}")
+        print(f"部分通过（含SKIP）: {results.get('pass_with_skip', 0)}")
+        print(f"整体跳过: {results.get('skipped', 0)}")
         print(f"警告: {results['warned']}")
         print(f"失败: {results['failed']}")
 

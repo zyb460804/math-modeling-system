@@ -1,6 +1,8 @@
 import argparse
 import json
+import math
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +22,7 @@ TASKS_FILE = OUTPUT_DIR / "tasks.json"
 REPORT_JSON = QA_DIR / "evidence_gate_report.json"
 REPORT_MD = QA_DIR / "evidence_gate_report.md"
 
+# CR-8/G-02：增补 "TBD" 与 "待补"（手写索引/结果常用占位写法，此前不在坏状态表内直接放行）
 BAD_STATUSES = {
     "missing",
     "needs_real_modeling",
@@ -28,7 +31,15 @@ BAD_STATUSES = {
     "template",
     "draft",
     "scaffold_result_needs_review",
+    "TBD",
+    "待补",
 }
+
+# figures/ 目录视为"图片"的扩展名（双向 diff 用）
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp", ".tif", ".tiff", ".pdf"}
+
+# 判断来源字符串是否"像一个文件路径"（含路径分隔符，或以扩展名结尾）
+_PATH_LIKE_RE = re.compile(r"\.[A-Za-z0-9]{1,6}$")
 
 
 def configure_utf8_stdio() -> None:
@@ -104,12 +115,129 @@ def status_of(item: dict[str, Any] | None) -> str:
     return str(item.get("evidence_status") or item.get("status") or "").strip()
 
 
-def resolve_artifact(path_text: object) -> Path:
-    text = str(path_text or "").strip().strip("<>")
+def artifact_candidates(path_text: object) -> list[Path]:
+    """条目/来源路径的磁盘候选位置：仓库根相对、paper_output 相对；绝对路径原样。
+
+    CR-8：一切存在性判断以"候选命中磁盘"为准，不再信任 JSON 自报的 exists 字段。
+    兼容 tasks.json 的 "file.json#Q1" 指针写法——# 后为 JSON 内锚点，不属于路径。
+    """
+    text = str(path_text or "").strip().strip("<>").split("#")[0].strip()
+    if not text:
+        return []
     path = Path(text)
     if path.is_absolute():
-        return path
-    return BASE_DIR / path
+        return [path]
+    return [BASE_DIR / path, OUTPUT_DIR / path]
+
+
+def resolve_artifact(path_text: object) -> Path:
+    """返回第一个存在的候选路径；全不存在时返回首选候选（供报错信息使用）。"""
+    candidates = artifact_candidates(path_text)
+    if not candidates:
+        return BASE_DIR
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+def looks_like_file_path(text: str) -> bool:
+    """粗判来源字符串是否为文件路径（含分隔符或带扩展名结尾）。
+
+    table_index 的 source 允许写「论文正文」这类非文件来源——无法用磁盘事实核验，
+    降为 WARNING 提示，而不是误判成"文件不存在"的 FAIL。
+    """
+    return ("/" in text) or ("\\" in text) or bool(_PATH_LIKE_RE.search(text))
+
+
+def index_entry_path(entry: dict[str, Any]) -> str | None:
+    """取索引条目的产物路径字段（figure 条目用 path，table 条目用 source，兼容别名）。"""
+    for field in ("path", "source", "file", "file_path"):
+        text = str(entry.get(field) or "").strip()
+        if text:
+            return text
+    return None
+
+
+def check_index_entries_disk(entries: list[dict[str, Any]], kind: str) -> tuple[list[str], list[str]]:
+    """逐条核验 figure/table 索引条目声明的产物文件在磁盘真实存在。
+
+    定级（CR-8）：
+    - 声明了文件路径但磁盘不存在 → FAIL（CRITICAL）：论文引用了不存在的证据，
+      是"手写索引伪造合规外观"（G-02）的典型形态；
+    - 未声明路径 / 来源非文件（如「论文正文」）→ WARNING：无法核验，不装作已核验。
+    条目自报的 exists 字段一律忽略，只认磁盘事实。
+    """
+    failures: list[str] = []
+    warnings: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        qid = str(entry.get("question_id") or "ALL")
+        ident = str(entry.get("figure_id") or entry.get("id") or entry.get("title") or "?")
+        text = index_entry_path(entry)
+        if text is None:
+            warnings.append(f"{qid}: {kind}条目 [{ident}] 未声明 path/source 文件路径，无法核验磁盘存在性")
+            continue
+        if not looks_like_file_path(text):
+            warnings.append(f"{qid}: {kind}条目 [{ident}] 来源「{text}」非文件路径，无法核验磁盘存在性")
+            continue
+        if not any(candidate.exists() for candidate in artifact_candidates(text)):
+            failures.append(f"{qid}: {kind}条目 [{ident}] 指向的文件不存在（磁盘事实）：{text}")
+    return failures, warnings
+
+
+def diff_figures_dir_vs_index(figure_entries: list[dict[str, Any]]) -> list[str]:
+    """figures/ 目录实际图片清单 vs figure_index.json 条目的双向 diff（CR-8/M-12）。
+
+    定级斟酌：
+    - 索引有条目但磁盘无图 → FAIL：由 check_index_entries_disk 承担（引用不存在的证据=伪造风险）；
+    - 磁盘有图但索引无条目 → WARNING：图已产出但未登记，属可追溯性缺口（可能是废稿/未用图），
+      不必然是造假，故提示而不阻断；索引同步由 figure skill 收口。
+    """
+    figures_dir = OUTPUT_DIR / "figures"
+    disk_images: set[str] = set()
+    if figures_dir.is_dir():
+        for path in figures_dir.rglob("*"):
+            if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES:
+                disk_images.add(os.path.normcase(str(path.resolve())))
+
+    indexed: set[str] = set()
+    for entry in figure_entries:
+        if not isinstance(entry, dict):
+            continue
+        text = index_entry_path(entry)
+        if text is None or not looks_like_file_path(text):
+            continue
+        candidates = artifact_candidates(text)
+        if not candidates:
+            continue
+        hit = next((c for c in candidates if c.exists()), candidates[0])
+        indexed.add(os.path.normcase(str(hit.resolve())))
+
+    disk_only = disk_images - indexed
+    return [
+        f"figures/ 目录存在未登记进 figure_index.json 的图片（可追溯性缺口）：{path}"
+        for path in sorted(disk_only)
+    ]
+
+
+def check_task_artifacts(task_map: dict[str, list[dict[str, Any]]]) -> list[str]:
+    """tasks.json 每条 artifact 路径验磁盘存在（容忍 #锚点 后缀）。
+
+    定级斟酌：缺失记 WARNING 而非 FAIL——tasks.json 是任务追踪的辅助证据；
+    主证据链（model_results 的 provenance.output_artifacts 缺失）已是 FAIL 级，
+    辅助记录缺文件提示即可，避免对合法中间状态误杀。
+    """
+    warnings: list[str] = []
+    for qid, entries in task_map.items():
+        for entry in entries:
+            raw = str(entry.get("artifact") or "").strip()
+            if not raw:
+                continue
+            if not any(candidate.exists() for candidate in artifact_candidates(raw)):
+                warnings.append(f"{qid}: tasks.json artifact 不存在（磁盘事实）：{raw}")
+    return warnings
 
 
 def provenance_failures(item: dict[str, Any]) -> list[str]:
@@ -188,26 +316,69 @@ def check_question_coverage(
     return failures
 
 
+# 嵌套 metrics schema 下的占位字符串（小写比较）；出现即视为"无真实值"
+_PLACEHOLDER_STRINGS = {
+    "", "to_be_filled", "tbd", "待补", "待填", "待定", "missing", "draft",
+    "draft_contract", "template", "n/a", "na", "nan", "none",
+}
+
+
+def is_real_metric_value(value: Any) -> bool:
+    """嵌套 metrics schema 下的"真实值"判定：数值/布尔/非空列表/非占位字符串。"""
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return True
+    if isinstance(value, (int, float)):
+        return value == value and not math.isinf(value)  # 排除 NaN/inf
+    if isinstance(value, (list, tuple)):
+        return len(value) > 0
+    if isinstance(value, str):
+        return value.strip().lower() not in _PLACEHOLDER_STRINGS
+    return True
+
+
 def check_metric_richness(
     metric_items: list[dict[str, Any]],
     qid: str,
 ) -> list[str]:
-    """检查指标是否丰富（不是全部 to_be_filled）。"""
+    """指标丰富度检查（M-14 修复：双 schema 兼容）。
+
+    - 现行嵌套 schema：条目形如 {"question_id": "Q1", "metrics": {name: 真实数值}}，
+      无 status/value 字段——metrics 下每个"真实值"键计 filled。旧逻辑只认
+      status/value，对该 schema 完全空转，还对满真值的条目误报"均为 to_be_filled"。
+    - 旧扁平 schema：条目带 {"status": ..., "value": ...}，沿用旧口径，保持兼容。
+    """
     warnings: list[str] = []
     if not metric_items:
         return warnings
 
-    filled_count = sum(
-        1 for m in metric_items
-        if str(m.get("status", "")).strip() not in ("to_be_filled", "", "draft_contract")
-        and m.get("value") is not None
-    )
-    total_count = len(metric_items)
+    filled_count = 0
+    total_count = 0
+    for item in metric_items:
+        nested = item.get("metrics") if isinstance(item, dict) else None
+        if isinstance(nested, dict):
+            # 现行嵌套 schema：metrics 子键即指标
+            for value in nested.values():
+                total_count += 1
+                if is_real_metric_value(value):
+                    filled_count += 1
+            continue
+        # 旧扁平 schema
+        total_count += 1
+        if (
+            str(item.get("status", "")).strip() not in ("to_be_filled", "", "draft_contract")
+            and item.get("value") is not None
+        ):
+            filled_count += 1
 
-    if filled_count == 0:
-        warnings.append(f"{qid}: 所有指标均为 to_be_filled 状态，无真实计算结果")
+    # 注意：调用方合并进全局 warnings 时统一加 "{qid}: " 前缀，消息本身不再自带
+    if total_count == 0:
+        warnings.append("metrics 条目既无 metrics 键也无 value 字段，为空转条目")
+    elif filled_count == 0:
+        warnings.append("所有指标均为占位值（to_be_filled/TBD/待补等），无真实计算结果")
     elif filled_count < total_count:
-        warnings.append(f"{qid}: 仅 {filled_count}/{total_count} 个指标有真实值")
+        warnings.append(f"仅 {filled_count}/{total_count} 个指标有真实值")
 
     return warnings
 
@@ -279,6 +450,24 @@ def evaluate() -> dict[str, Any]:
     table_map = table_items(table_index)
     task_map = task_items(tasks)
 
+    # ★ CR-8：从"只读自报字段"改为"碰磁盘事实"（全局做一次，避免 ALL 条目按问重复）：
+    # 1) figure/table 索引条目声明的文件必须在磁盘存在（自报 exists 字段不可信）；
+    # 2) figures/ 实际图片清单与 figure_index.json 双向 diff；
+    # 3) tasks.json 每条 artifact 验磁盘存在。
+    figure_entries = figure_index.get("figures") if isinstance(figure_index, dict) else []
+    figure_entries = figure_entries if isinstance(figure_entries, list) else []
+    table_entries = table_index.get("tables") if isinstance(table_index, dict) else []
+    table_entries = table_entries if isinstance(table_entries, list) else []
+
+    fig_failures, fig_path_warnings = check_index_entries_disk(figure_entries, "figure")
+    tbl_failures, tbl_path_warnings = check_index_entries_disk(table_entries, "table")
+    failures.extend(fig_failures)
+    failures.extend(tbl_failures)
+    warnings.extend(fig_path_warnings)
+    warnings.extend(tbl_path_warnings)
+    warnings.extend(diff_figures_dir_vs_index(figure_entries))
+    warnings.extend(check_task_artifacts(task_map))
+
     question_reports = []
     for qid in qids:
         q_failures: list[str] = []
@@ -321,6 +510,24 @@ def evaluate() -> dict[str, Any]:
 
         if not q_tasks:
             q_warnings.append("tasks.json 中没有对应问题任务，正式写作时需补齐任务追踪")
+
+        # ★ CR-8：status_of 返回空串（status/evidence_status 字段缺失）按"未声明"处理并提示，
+        # 不再当作正常放行（每问聚合成一条，避免逐条刷屏）。
+        status_gap_sources: list[str] = []
+        if result is not None and not status_of(result):
+            status_gap_sources.append("model_results")
+        if q_metrics and not any(status_of(m) for m in q_metrics):
+            status_gap_sources.append("metrics")
+        if q_conclusions and not any(status_of(m) for m in q_conclusions):
+            status_gap_sources.append("conclusions")
+        if q_tables and not any(status_of(t) for t in q_tables):
+            status_gap_sources.append("tables")
+        if status_gap_sources:
+            # 注意：合并进全局 warnings 时会统一加 "{qid}: " 前缀，此处不再自带
+            q_warnings.append(
+                f"证据条目缺少 status/evidence_status 字段（按未声明处理，磁盘存在性已另行核验）："
+                f"{', '.join(status_gap_sources)}"
+            )
 
         for message in q_failures:
             failures.append(f"{qid}: {message}")

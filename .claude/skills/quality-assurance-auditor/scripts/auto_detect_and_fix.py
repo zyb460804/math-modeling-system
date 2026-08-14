@@ -133,11 +133,16 @@ DETECTORS = {
 
 
 def run_script(script_path: Path, extra_args: list = None) -> tuple:
-    """运行脚本，返回 (passed, output)"""
-    if not script_path.exists():
-        return True, f"脚本不存在: {script_path}"
+    """运行脚本，返回 (passed, output)
 
-    cmd = ["python", str(script_path)]
+    CR-4 修复：
+    - 检测脚本不存在 = FAIL（原 return True 使任一检测器路径失效都显示"检测通过"）
+    - 子进程解释器用 sys.executable（本机全局 python 是坏 venv，PATH 上的 "python" 不可用）
+    """
+    if not script_path.exists():
+        return False, f"检测脚本不存在: {script_path}"
+
+    cmd = [sys.executable, str(script_path)]
     if extra_args:
         cmd.extend(extra_args)
 
@@ -174,12 +179,8 @@ def detect_and_fix(stage: str, config: dict) -> bool:
     for round_num in range(1, max_rounds + 1):
         print(f"\n  --- 第 {round_num}/{max_rounds} 轮 ---")
 
-        # 检测
-        if is_combined:
-            # combined 模式：检测时不加 --fix-all
-            passed, output = run_script(config["script"])
-        else:
-            passed, output = run_script(config["script"])
+        # 检测（combined 与普通模式在检测阶段行为一致，差异只在下方修复器参数——原 if/else 两分支相同，已合并）
+        passed, output = run_script(config["script"])
 
         if passed:
             print(f"  [OK] 检测通过")

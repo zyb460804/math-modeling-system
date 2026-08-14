@@ -2,8 +2,11 @@
 # -*- coding: utf-8 -*-
 """PreToolUse hook：git 提交前密钥拦截。
 
-仅在 Bash 命令包含 "git commit" 时触发扫描，其余 Bash 命令直接放行（零开销）。
-扫描逻辑委托给 consistency-auditor/scripts/security_check.py（密钥/路径/注入防护）。
+仅在 Bash 命令为 git commit（token 化判定，兼容 `git -c a=b commit`、
+`git commit --amend`、复合命令 `git add . && git commit -m x`）时触发扫描，
+其余 Bash 命令直接放行（零开销）。
+扫描逻辑委托给 consistency-auditor/scripts/security_check.py staged 子命令
+（扫描 git 暂存区全部文件，而非只扫 paper_output/）。
 发现密钥 → 退出码 2（阻止提交，stderr 展示给用户）。
 
 融合自 AutoMCM-Pro 的"密钥提交拦截"机制，接入方式遵循本项目 hooks 惯例
@@ -13,6 +16,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -30,16 +35,52 @@ SCANNER = PROJECT_ROOT / ".claude" / "skills" / "consistency-auditor" / "scripts
 SCANNER_FALLBACK = Path("e:/数学建模/.claude/skills/consistency-auditor/scripts/security_check.py")
 
 
-def _is_git_commit(command: str) -> bool:
-    """判断 Bash 命令是否为 git commit（含 git commit -m / --amend 等）。"""
-    if not command:
+def _segment_is_git_commit(segment: str) -> bool:
+    """判定单个命令段（已去掉 && ; || | 复合拼接）是否为 `git commit`。
+
+    token 化后判定：首 token 为 git/git.exe（含绝对路径形式），跳过 git
+    全局选项及其取值（-c a=b / -C path / --git-dir=x / --no-pager 等）后，
+    首个子命令 token 为 "commit" 即命中。这覆盖旧版漏掉的 `git -c a=b commit`，
+    也自然覆盖 `git commit --amend`（--amend 是 commit 的选项，子命令仍为 commit）。
+
+    已知边界（判定为非 commit，不拦截）：
+      - `git commit-tree`（子命令是 commit-tree，非 commit；与旧版口径一致）
+      - `git --work-tree x commit` 这类空格取值的全局长选项（解析为子命令 "x"）
+      - `GIT_DIR=x git commit`（环境变量前缀，首 token 非 git）
+    """
+    try:
+        tokens = shlex.split(segment, posix=True)
+    except ValueError:  # 引号不配对等，退化为空白切分
+        tokens = segment.split()
+    if not tokens:
         return False
-    # 容忍中间参数；排除 git commit-tree 等
-    tokens = command.strip().split()
-    if len(tokens) >= 2 and tokens[0] == "git" and tokens[1] == "commit":
-        return True
-    # 形如 "git add . && git commit -m ..."
-    return " git commit" in (" " + command) or command.startswith("git commit")
+    first = os.path.basename(tokens[0].replace("\\", "/").strip('"')).lower()
+    if first not in ("git", "git.exe"):
+        return False
+    i = 1
+    while i < len(tokens):
+        t = tokens[i]
+        if t == "--":  # git 自身无 -- 分隔符，保守不判
+            return False
+        if t in ("-c", "-C", "--exec-path") and i + 1 < len(tokens):
+            i += 2  # 跳过选项 + 其取值
+            continue
+        if t.startswith("--") and "=" in t:
+            i += 1  # --git-dir=x 等自带取值
+            continue
+        if t.startswith("-"):
+            i += 1  # 无参 flag（--no-pager / --bare / --literal-pathspecs …）
+            continue
+        return t == "commit"  # 首个非选项 token 即子命令
+    return False
+
+
+def _is_git_commit(command: str) -> bool:
+    """判断 Bash 命令是否含 git commit（含复合命令 `git add . && git commit -m x`）。"""
+    if not command or not command.strip():
+        return False
+    segments = re.split(r"&&|\|\||;|\|", command)
+    return any(_segment_is_git_commit(seg.strip()) for seg in segments)
 
 
 def main() -> int:
@@ -59,13 +100,17 @@ def main() -> int:
     if not _is_git_commit(command):
         return 0  # 非 git commit，零开销放行
 
-    # 是 git commit → 跑密钥扫描
+    # 是 git commit → 跑密钥扫描（--staged：扫 git 暂存区全部文件，
+    # 旧版 all 只扫 paper_output/，.claude/ 等目录的密钥会漏过）
     scanner = SCANNER if SCANNER.exists() else SCANNER_FALLBACK
     if not scanner.exists():
         return 0  # 扫描器缺失，不阻断
+    # 解释器优先项目 .venv（本机全局 python 是坏 venv，见环境备忘），兜底 sys.executable
+    venv_py = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
+    interpreter = str(venv_py) if venv_py.exists() else sys.executable
     try:
         proc = subprocess.run(
-            [sys.executable, str(scanner), "all"],
+            [interpreter, str(scanner), "staged"],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=60, cwd=str(PROJECT_ROOT),
         )

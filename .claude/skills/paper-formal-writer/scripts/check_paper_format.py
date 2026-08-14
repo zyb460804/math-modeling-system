@@ -346,7 +346,8 @@ def visual_qa_failures(
     if figure_count > 0 and image_count == 0:
         failures.append("figure_index.json 有图片计划，但 Word 中没有图片。")
     elif image_count < figure_count:
-        warnings.append(f"Word 图片数量少于 figure_index.json：{image_count} < {figure_count}")
+        # H-9：缺嵌从 warning 升级为 failure——"N 图全嵌"必须是机制保证而非运气
+        failures.append(f"Word 图片数量少于 figure_index.json：{image_count} < {figure_count}")
 
     if table_count > 0 and docx_table_count == 0:
         failures.append("table_index.json 有表格计划，但 Word 中没有表格。")
@@ -411,6 +412,11 @@ def evaluate(source_override: Path | None = None) -> dict[str, Any]:
         failures.append(f"缺少正式论文文件：{rel(DOCX_FILE)} 和 {rel(SOURCE_FILE)}")
         text = ""
         source_label = "none"
+
+    # 实伤-2 防线：全文 U+FFFD 扫描——替换符意味着编码链路已丢字，直接判 FAIL
+    fffd_count = text.count("\ufffd")
+    if fffd_count:
+        failures.append(f"正文含 U+FFFD 替换符（编码丢字信号）：{fffd_count} 处，需人工核对源稿补全")
 
     counts = char_count(text)
     target_words = outline.get("target_words", {}) if isinstance(outline, dict) else {}

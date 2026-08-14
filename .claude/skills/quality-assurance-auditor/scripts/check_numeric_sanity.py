@@ -6,11 +6,16 @@
   自动检查决策变量范围、目标值量级、有无 inf/nan，任一异常回退。
 
 与 check_result_reasonableness.py（硬编码 Q1-Q4 指标范围）互补：
-  本脚本递归扫描 paper_output/results/*.json 所有数值字段，做通用 sanity 检查。
+  本脚本递归扫描 paper_output/results/**/*.json（含子目录）所有数值字段，做通用 sanity 检查。
+
+额外规则（2026-08 修复 M-8）：
+  - JSON 解析失败：记 WARNING 级 issue（不再静默跳过），全部损坏也必须看得见；
+  - 字符串化的 inf/nan（如 "Infinity"、"-inf"、"nan"）：记 CRITICAL issue
+    （数值溢出/计算失败被当文本写出的同义症状）。
 
 用法：
   python check_numeric_sanity.py [--results-dir PATH]
-退出码：0=无 CRITICAL  1=发现 inf/nan/极端量级
+退出码：0=无 CRITICAL（可有 WARNING）  1=发现 inf/nan/极端量级（含字符串化形态）
 """
 from __future__ import annotations
 
@@ -35,6 +40,10 @@ MAGNITUDE_LO = 1e-9
 MAGNITUDE_HI = 1e10
 # 绝对值大于此视为极端量级（可能是单位错误或溢出）
 EXTREME_HI = 1e15
+
+# 字符串化 inf/nan 识别表（整串精确匹配：strip+lower 后比对，避免误伤叙述文本）
+_STRING_INF_TOKENS = {"inf", "+inf", "-inf", "infinity", "+infinity", "-infinity"}
+_STRING_NAN_TOKENS = {"nan"}
 
 
 def _is_number(v: Any) -> bool:
@@ -61,6 +70,17 @@ def scan_value(path: str, value: Any, issues: list[dict]) -> None:
         elif abs(v) > MAGNITUDE_HI:
             issues.append({**field, "type": "LARGE_MAGNITUDE", "severity": "WARNING",
                            "msg": f"大量级 |{v:.3g}| > {MAGNITUDE_HI:.0g}（确认单位/量纲）"})
+    elif isinstance(value, str):
+        # M-8: 字符串化的数字也要扫（"Infinity"/"nan" 等，整串精确匹配避免误伤普通文本）
+        token = value.strip().lower()
+        if token in _STRING_INF_TOKENS:
+            issues.append({"path": path, "value": value.strip(),
+                           "type": "STRING_INF", "severity": "CRITICAL",
+                           "msg": f"字符串化 Inf（{value.strip()!r}）：数值溢出被当文本写出"})
+        elif token in _STRING_NAN_TOKENS:
+            issues.append({"path": path, "value": value.strip(),
+                           "type": "STRING_NAN", "severity": "CRITICAL",
+                           "msg": f"字符串化 NaN（{value.strip()!r}）：计算失败被当文本写出"})
     elif isinstance(value, dict):
         for k, sub in value.items():
             scan_value(f"{path}.{k}" if path else k, sub, issues)
@@ -77,7 +97,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "检查 inf/nan/极端量级（通用、非侵入式）。"
         ),
         epilog=(
-            "零参数运行保持原行为：扫描 paper_output/results/*.json，"
+            "零参数运行保持原行为：递归扫描 paper_output/results/**/*.json（含子目录），"
             "报告写入 paper_output/qa/numeric_sanity_report.json。"
             "退出码：0=无 CRITICAL，1=发现 inf/nan/极端量级。"
         ),
@@ -97,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     if not results_dir.exists():
         print(f"[skip] 结果目录不存在: {results_dir}")
         return 0
-    json_files = sorted(results_dir.glob("*.json"))
+    json_files = sorted(results_dir.rglob("*.json"))  # M-8: 真递归，子目录不再逃逸
     if not json_files:
         print("[skip] 无结果 JSON")
         return 0
@@ -105,21 +125,31 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[numeric-sanity] 扫描 {len(json_files)} 个结果文件…\n")
     all_issues: list[dict] = []
     for jf in json_files:
+        rel = jf.relative_to(results_dir).as_posix()  # 递归后用相对路径区分子目录
         try:
             data = json.loads(jf.read_text(encoding="utf-8"))
         except Exception as e:
-            print(f"  ⚠ 解析失败 {jf.name}: {e}")
+            # M-8: 文件损坏不可静默——记 WARNING issue，至少要看得见
+            msg = f"JSON 解析失败: {e}"
+            print(f"  ⚠ {rel}: {msg}")
+            all_issues.append({
+                "path": "<unparseable>",
+                "type": "UNPARSEABLE_JSON",
+                "severity": "WARNING",
+                "msg": msg,
+                "file": rel,
+            })
             continue
         file_issues: list[dict] = []
         scan_value("", data, file_issues)
         for it in file_issues:
-            it["file"] = jf.name
+            it["file"] = rel
         all_issues.extend(file_issues)
         if file_issues:
             n_crit = sum(1 for x in file_issues if x["severity"] == "CRITICAL")
-            print(f"  ✗ {jf.name}: {len(file_issues)} 问题 ({n_crit} CRITICAL)")
+            print(f"  ✗ {rel}: {len(file_issues)} 问题 ({n_crit} CRITICAL)")
         else:
-            print(f"  ✓ {jf.name}: 干净")
+            print(f"  ✓ {rel}: 干净")
 
     n_crit = sum(1 for x in all_issues if x["severity"] == "CRITICAL")
     n_warn = sum(1 for x in all_issues if x["severity"] == "WARNING")
@@ -129,7 +159,17 @@ def main(argv: list[str] | None = None) -> int:
     print(f"{'═' * 48}")
     for it in all_issues:
         mark = "✗" if it["severity"] == "CRITICAL" else "⚠"
-        print(f"  {mark} {it['file']}:{it['path']} = {it['value']:.4g}  [{it['type']}]")
+        val = it.get("value")
+        if isinstance(val, (int, float)):
+            val_str = f" = {val:.4g}"
+        elif val is not None:
+            val_str = f" = {val!r}"
+        else:
+            val_str = ""  # UNPARSEABLE_JSON 等无值 issue
+        line = f"  {mark} {it['file']}:{it['path']}{val_str}  [{it['type']}]"
+        if it.get("msg"):
+            line += f"  {it['msg']}"
+        print(line)
 
     QA_DIR.mkdir(parents=True, exist_ok=True)
     REPORT_FILE.write_text(

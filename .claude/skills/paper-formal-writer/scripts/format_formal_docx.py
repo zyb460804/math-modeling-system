@@ -35,7 +35,20 @@ REPORT_MD = REPORT_MD_FORMAL
 # ── 跨 skill 复用 docx-editor-cn 的 LaTeX→OMML（pandoc 链路）─────────────────
 # 依赖：pandoc ≥ 2.0（v4.5 体检已装机）。失败时退化为 Cambria Math 纯文本，
 # 不阻断生成（但 Word 双击公式不会进编辑器）。
-_DOCX_EDITOR_SCRIPTS = BASE_DIR / ".claude" / "skills" / "docx-editor-cn" / "scripts"
+def _locate_docx_editor_scripts() -> Path:
+    """CR-7 修复：从本脚本文件位置逐级上溯定位 docx-editor-cn/scripts，
+    不再依赖 Path.cwd()——从任意工作目录运行都能 import formula 模块。"""
+    here = Path(__file__).resolve()
+    for ancestor in here.parents:
+        candidate = ancestor / ".claude" / "skills" / "docx-editor-cn" / "scripts"
+        if candidate.is_dir():
+            return candidate
+    # 已知布局兜底（scripts/ → paper-formal-writer/ → skills/）：不存在时
+    # import 失败 → _FORMULA_AVAILABLE=False → 报告 DEGRADED（可见，不再静默）。
+    return here.parents[2] / "docx-editor-cn" / "scripts"
+
+
+_DOCX_EDITOR_SCRIPTS = _locate_docx_editor_scripts()
 if str(_DOCX_EDITOR_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_DOCX_EDITOR_SCRIPTS))
 try:
@@ -51,6 +64,12 @@ except Exception as _exc:  # pragma: no cover - 环境问题兜底
 
 _OMML_CACHE: dict[str, str] = {}
 INLINE_FORMULA_PAT = re.compile(r"\$([^$\n]+?)\$")
+
+# CR-7 修复：OMML 渲染计数（此前零上报，pandoc 缺失=全退化仍报 GENERATED）。
+# _append_omml 每次尝试 total+1；成功 ok+1；退化为 Cambria Math 纯文本 fallback+1。
+_OMML_STATS: dict[str, int] = {"total": 0, "ok": 0, "fallback": 0}
+# H-1/H-8 修复：渲染期失败清单（路径拒绝 / 索引未命中 / 文件缺失），进报告 Failures 节。
+_RENDER_FAILURES: list[str] = []
 
 
 def _latex_to_omml_cached(latex: str) -> str:
@@ -72,15 +91,19 @@ def _latex_to_omml_cached(latex: str) -> str:
 
 def _append_omml(paragraph, latex: str) -> bool:
     """把 LaTeX 转 OMML 并 append 到段落元素。成功返回 True。"""
+    _OMML_STATS["total"] += 1
     omml_xml = _latex_to_omml_cached(latex)
     if not omml_xml:
+        _OMML_STATS["fallback"] += 1
         return False
     try:
         omath = parse_xml(omml_xml)
         paragraph._element.append(omath)
+        _OMML_STATS["ok"] += 1
         return True
     except Exception as exc:
         print(f"[formula] OMML 注入失败 ({latex!r}): {exc}", file=sys.stderr)
+        _OMML_STATS["fallback"] += 1
         return False
 
 
@@ -108,17 +131,49 @@ def rel(path: Path) -> str:
         return path.as_posix()
 
 
-def resolve_path(path_text: str) -> Path:
-    normalized = path_text.strip().strip("<>").replace("/", "\\")
-    path = Path(normalized)
+# H-1 修复：消费点扩展名白名单。图片只收位图/矢量图，表格只收数据文件——
+# 防止 md/table_index 一句 ![](任意路径) 把本地文件嵌入外发论文（数据外泄信道）。
+IMAGE_EXT_WHITELIST = frozenset({".png", ".jpg", ".jpeg", ".svg", ".gif", ".emf"})
+TABLE_EXT_WHITELIST = frozenset({".csv", ".xlsx", ".json"})
+
+
+def resolve_path(path_text: str, allowed_exts: frozenset[str] | None = None) -> Path:
+    """源稿路径 → 实际文件路径。安全门禁（H-1）：
+
+    1. 拒绝绝对路径与含 ``..`` 段的相对路径（Path.parts 检查）；
+    2. resolve() 后必须位于 paper_output/ 或项目根内，越界拒绝；
+    3. 传入 allowed_exts 时扩展名必须在白名单内。
+    任一不满足 → 记入 _RENDER_FAILURES 并返回一个**不存在**的占位路径，
+    由下游 add_image/add_table_from_rows 走既有"文件未找到"可见占位，
+    不会静默消失，也不会读到白名单外的文件。
+
+    相对路径解析保持原语义：优先 paper_output/（图表实际位置），回退项目根。
+    """
+    raw = path_text.strip().strip("<>").strip()
+
+    def _rejected(reason: str) -> Path:
+        _RENDER_FAILURES.append(f"路径被安全门禁拒绝（{reason}）：{raw}")
+        # 只保留文件名部分，保证返回的占位路径本身不可能命中真实文件
+        safe_name = Path(raw.replace("\\", "/")).name or "REJECTED"
+        return OUTPUT_DIR / "_path_rejected" / safe_name
+
+    if not raw:
+        return _rejected("路径为空")
+    path = Path(raw)
     if path.is_absolute():
-        return path
-    # 相对路径：源稿写 figures/xxx.png 实际在 paper_output/figures/，
-    # 优先 paper_output/（图表实际位置），回退项目根
-    for candidate in (OUTPUT_DIR / path, BASE_DIR / path):
+        return _rejected("绝对路径")
+    if ".." in path.parts:
+        return _rejected("含 .. 上跳段")
+    if allowed_exts is not None and path.suffix.lower() not in allowed_exts:
+        return _rejected(f"扩展名 {path.suffix or '(无)'} 不在白名单 {sorted(allowed_exts)}")
+    for base in (OUTPUT_DIR, BASE_DIR):
+        candidate = base / path
         if candidate.exists():
-            return candidate
-    return OUTPUT_DIR / path
+            resolved = candidate.resolve()
+            if not (resolved.is_relative_to(OUTPUT_DIR.resolve()) or resolved.is_relative_to(BASE_DIR.resolve())):
+                return _rejected("resolve 后位于 paper_output/ 与项目根之外（越界）")
+            return resolved
+    return OUTPUT_DIR / path  # 文件不存在 → 下游可见占位（既有行为）
 
 
 def set_cell_shading(cell, fill: str) -> None:
@@ -209,24 +264,90 @@ def clean_inline_markdown(text: str) -> str:
     return text.strip()
 
 
+# H-10 修复：货币/转义美元误切保护。
+# 行内公式切分（INLINE_FORMULA_PAT）之前，先把 `$` 的非公式来源换成不可冲突占位符：
+#   1. code span `...`（如 `plot_$x$.py`）——整段原样保护，还原后再由
+#      clean_inline_markdown 去反引号；
+#   2. `\$` 转义（如 "成本为 \$100"）——按 Markdown 语义还原为字面 `$`。
+# 占位符用 Unicode 私有区字符包裹（正文/公式不可能出现），且不含 `$`，
+# 不会被 INLINE_FORMULA_PAT 匹配。
+_PROTECT_CODE_SPAN = re.compile(r"`[^`\n]+`")
+_PROTECT_ESCAPED_DOLLAR = re.compile(r"\\\$")
+_PROTECT_KEY_OPEN = "\ue000"
+_PROTECT_KEY_CLOSE = "\ue001"
+# 行内公式内容守卫（对齐 pandoc 启发式 + C 题经济文本加固）：
+_FORMULA_GUARD_CJK = re.compile(r"[\u4e00-\u9fff\u3000-\u303f\uff00-\uffef]")
+
+
+def _protect_dollar_sensitive(text: str) -> tuple[str, dict[str, str]]:
+    """返回（保护后文本, 占位符→还原文本 的映射）。"""
+    restore: dict[str, str] = {}
+
+    def _stash(match_text: str, replacement: str) -> str:
+        key = f"{_PROTECT_KEY_OPEN}{len(restore)}{_PROTECT_KEY_CLOSE}"
+        restore[key] = replacement
+        return key
+
+    protected = _PROTECT_CODE_SPAN.sub(lambda m: _stash(m.group(0), m.group(0)), text)
+    protected = _PROTECT_ESCAPED_DOLLAR.sub(lambda m: _stash(m.group(0), "$"), protected)
+    return protected, restore
+
+
+def _restore_protected(text: str, restore: dict[str, str]) -> str:
+    for key, value in restore.items():
+        if key in text:
+            text = text.replace(key, value)
+    return text
+
+
+def _is_inline_formula_candidate(content: str, full_text: str, start: int, end: int) -> bool:
+    """判定一个 ``$...$`` 匹配是否可信为行内公式（H-10 守卫）：
+
+    - 内容首尾不能是空白（pandoc 规则：`$` 右邻、闭 `$` 左邻须非空格）；
+    - 内容含 CJK（汉字/中文标点/全角字符）→ 一定不是 LaTeX 公式；
+    - 开 `$` 紧邻前一位是数字、或闭 `$` 紧邻后一位是数字 → 货币金额形态
+      （如 "3.5$，4.5$"、"$20,000 和 $30"），拒绝。
+    """
+    if content[:1].isspace() or content[-1:].isspace():
+        return False
+    if _FORMULA_GUARD_CJK.search(content):
+        return False
+    if start > 0 and full_text[start - 1].isdigit():
+        return False
+    if full_text[end:end + 1].isdigit():
+        return False
+    return True
+
+
 def _add_runs_with_inline_formula(paragraph, text: str, font: str = "宋体", size: float = 10.5, bold: bool = False) -> None:
     """把含 $...$ 行内公式的文本拆分注入段落：公式走 OMML，其余走普通 run。
 
     所有需要渲染含公式文本的段落（body/center/heading/list/table cell）都应调用此函数，
     确保 100% 行内公式覆盖。无公式时退化为单个普通 run。
+
+    H-10：切分前先保护 code span 与 ``\\$`` 转义（货币/文件名不再误切进公式），
+    再用 _is_inline_formula_candidate 守卫过滤货币形态的伪公式；被守卫拒绝的
+    ``$...$`` 保持原样作为正文输出（不吞正文）。
     """
+    protected, restore = _protect_dollar_sensitive(text)
+
+    def _plain(segment: str) -> str:
+        return clean_inline_markdown(_restore_protected(segment, restore))
+
     pos = 0
-    for m in INLINE_FORMULA_PAT.finditer(text):
+    for m in INLINE_FORMULA_PAT.finditer(protected):
+        if not _is_inline_formula_candidate(m.group(1), protected, m.start(), m.end()):
+            continue  # 货币/误切形态：跳过，保持正文原样
         if m.start() > pos:
-            run = paragraph.add_run(clean_inline_markdown(text[pos:m.start()]))
+            run = paragraph.add_run(_plain(protected[pos:m.start()]))
             apply_run_font(run, font, size, bold)
         latex = m.group(1).strip()
         if not _append_omml(paragraph, latex):
             run = paragraph.add_run(latex)
             apply_run_font(run, "Cambria Math", size, bold)
         pos = m.end()
-    if pos < len(text):
-        run = paragraph.add_run(clean_inline_markdown(text[pos:]))
+    if pos < len(protected):
+        run = paragraph.add_run(_plain(protected[pos:]))
         apply_run_font(run, font, size, bold)
 
 
@@ -358,10 +479,12 @@ def build_figure_lookup(figure_index: Any) -> dict[str, dict[str, Any]]:
 
 
 def add_index_table(document: Document, table_id: str, table_lookup: dict[str, dict[str, Any]]) -> bool:
+    """按 table_id 嵌入表格。索引未命中（H-8）时插入可见占位段落而非静默消失。"""
     item = table_lookup.get(table_id)
     if not item:
+        add_body_paragraph(document, f"【表格占位：索引未命中 {table_id}，请补齐 table_index.json 条目或数据文件】")
         return False
-    rows = read_csv_rows(resolve_path(str(item.get("path") or "")))
+    rows = read_csv_rows(resolve_path(str(item.get("path") or ""), TABLE_EXT_WHITELIST))
     caption = item.get("caption") or item.get("title") or table_id
     if not str(caption).startswith("表"):
         caption = f"表 {caption}"
@@ -391,13 +514,16 @@ def add_image(document: Document, path: Path, caption: str | None = None) -> boo
 
 
 def add_index_figure(document: Document, figure_id: str, figure_lookup: dict[str, dict[str, Any]]) -> bool:
+    """按 figure_id 嵌入图片。索引未命中（H-8）时插入可见占位段落而非静默消失；
+    文件缺失/被安全门禁拒绝时由 add_image 走"图片文件未找到"可见占位。"""
     item = figure_lookup.get(figure_id)
     if not item:
+        add_body_paragraph(document, f"【图表占位：索引未命中 {figure_id}，请补齐 figure_index.json 条目或图片文件】")
         return False
     caption = item.get("caption") or item.get("title") or figure_id
     if not str(caption).startswith("图"):
         caption = f"图 {caption}"
-    return add_image(document, resolve_path(str(item.get("path") or item.get("expected_path") or "")), str(caption))
+    return add_image(document, resolve_path(str(item.get("path") or item.get("expected_path") or ""), IMAGE_EXT_WHITELIST), str(caption))
 
 
 def source_path() -> Path:
@@ -406,8 +532,11 @@ def source_path() -> Path:
     return FALLBACK_SOURCE_FILE
 
 
-def render_markdown(document: Document, text: str, table_lookup: dict[str, dict[str, Any]], figure_lookup: dict[str, dict[str, Any]]) -> dict[str, int]:
-    stats = {"headings": 0, "tables": 0, "figures": 0, "code_blocks": 0}
+def render_markdown(document: Document, text: str, table_lookup: dict[str, dict[str, Any]], figure_lookup: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    stats: dict[str, Any] = {"headings": 0, "tables": 0, "figures": 0, "code_blocks": 0}
+    # 每次渲染复位全局计数（CR-7 三计数 + H-1/H-8 失败清单）
+    _OMML_STATS.update(total=0, ok=0, fallback=0)
+    _RENDER_FAILURES.clear()
     lines = text.splitlines()
     idx = 0
     in_code = False
@@ -465,6 +594,8 @@ def render_markdown(document: Document, text: str, table_lookup: dict[str, dict[
         if table_marker:
             if add_index_table(document, table_marker.group(1), table_lookup):
                 stats["tables"] += 1
+            else:  # H-8：索引未命中/数据不可读 → 已插可见占位，这里补记 failure
+                _RENDER_FAILURES.append(f"[[TABLE:{table_marker.group(1)}]] 未成功嵌入（索引未命中或数据文件不可读）")
             idx += 1
             continue
 
@@ -472,13 +603,15 @@ def render_markdown(document: Document, text: str, table_lookup: dict[str, dict[
         if figure_marker:
             if add_index_figure(document, figure_marker.group(1), figure_lookup):
                 stats["figures"] += 1
+            else:  # H-8：同上，不再静默消失
+                _RENDER_FAILURES.append(f"[[FIGURE:{figure_marker.group(1)}]] 未成功嵌入（索引未命中或图片文件缺失）")
             idx += 1
             continue
 
         image_match = re.fullmatch(r"!\[(.*?)\]\((.*?)\)", stripped)
         if image_match:
             caption = image_match.group(1).strip()
-            path = resolve_path(image_match.group(2).strip())
+            path = resolve_path(image_match.group(2).strip(), IMAGE_EXT_WHITELIST)
             if add_image(document, path, caption or None):
                 stats["figures"] += 1
             idx += 1
@@ -529,14 +662,27 @@ def render_markdown(document: Document, text: str, table_lookup: dict[str, dict[
         stats["code_blocks"] += 1
     if formula_lines:
         add_block_formula(document, "\n".join(formula_lines))
+    # CR-7：合并 OMML 三计数与渲染失败清单进报告 stats
+    stats["omml_total"] = _OMML_STATS["total"]
+    stats["omml_ok"] = _OMML_STATS["ok"]
+    stats["omml_fallback"] = _OMML_STATS["fallback"]
+    stats["failures"] = list(_RENDER_FAILURES)
     return stats
 
 
-def write_report(stats: dict[str, int], source: Path, outline: Any) -> None:
+def write_report(stats: dict[str, Any], source: Path, outline: Any) -> str:
+    """写格式化报告，返回状态字符串（GENERATED / DEGRADED）。"""
+    omml_total = int(stats.get("omml_total", 0))
+    omml_ok = int(stats.get("omml_ok", 0))
+    omml_fallback = int(stats.get("omml_fallback", 0))
+    failures = list(stats.get("failures", []))
+    # CR-7：公式链退化（依赖缺失或有回退）时状态降级，不再零上报
+    degraded = (omml_fallback > 0) or (not _FORMULA_AVAILABLE)
+    status = "DEGRADED" if degraded else "GENERATED"
     lines = [
         "# Formal DOCX Formatting Report",
         "",
-        f"- Status: `GENERATED`",
+        f"- Status: `{status}`",
         f"- Generated at: `{datetime.now().isoformat(timespec='seconds')}`",
         f"- Source: `{rel(source)}`",
         f"- Output: `{rel(DOCX_FILE)}`",
@@ -546,11 +692,37 @@ def write_report(stats: dict[str, int], source: Path, outline: Any) -> None:
         f"- Tables inserted: `{stats.get('tables', 0)}`",
         f"- Figures inserted: `{stats.get('figures', 0)}`",
         f"- Code blocks: `{stats.get('code_blocks', 0)}`",
+        f"- OMML formulas (total): `{omml_total}`",
+        f"- OMML formulas (ok, Word 原生公式): `{omml_ok}`",
+        f"- OMML formulas (fallback, Cambria Math 纯文本): `{omml_fallback}`",
+        f"- Formula engine: `{'latex_to_omml via pandoc' if _FORMULA_AVAILABLE else 'UNAVAILABLE'}`",
         "- Render QA: `render_skipped`",
         "",
-        "LibreOffice 渲染不是本脚本的强依赖；若本机 LibreOffice 可用，可在最终交付前另行渲染 PNG/PDF 做视觉检查。",
     ]
+    if not _FORMULA_AVAILABLE:
+        lines.append(
+            "> ⚠ **DEGRADED 退化原因**：无法加载 `docx-editor-cn/scripts/formula.py::latex_to_omml`"
+            "（通常为 pandoc 缺失或依赖不可达），**全部公式退化为 Cambria Math 纯文本**——"
+            "Word 中双击不可进公式编辑器。请安装 pandoc ≥ 2.0 后重跑本脚本，"
+            "并确认 `_DOCX_EDITOR_SCRIPTS` 定位成功。"
+        )
+        lines.append("")
+    elif omml_fallback > 0:
+        lines.append(
+            f"> ⚠ **DEGRADED 退化原因**：{omml_fallback}/{omml_total} 个公式 OMML 转换或注入失败，"
+            "退化为 Cambria Math 纯文本（失败明细见运行 stderr 的 `[formula]` 日志）。"
+            "正式交付前应使 fallback 归零。"
+        )
+        lines.append("")
+    if failures:
+        lines.extend(["## Failures", ""])
+        lines.extend(f"- {item}" for item in failures)
+        lines.append("")
+    lines.append(
+        "LibreOffice 渲染不是本脚本的强依赖；若本机 LibreOffice 可用，可在最终交付前另行渲染 PNG/PDF 做视觉检查。"
+    )
     REPORT_MD.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+    return status
 
 
 def check_evidence_gate() -> tuple[bool, str]:
@@ -609,10 +781,18 @@ def main() -> int:
     stats = render_markdown(document, text, build_table_lookup(table_index), build_figure_lookup(figure_index))
     DOCX_FILE.parent.mkdir(parents=True, exist_ok=True)
     document.save(DOCX_FILE)
-    write_report(stats, source, outline)
+    status = write_report(stats, source, outline)
     label = "草稿 Word" if draft_mode else "正式 Word"
     print(f"{label}已生成：{rel(DOCX_FILE)}")
-    print(f"格式化报告已生成：{rel(REPORT_MD)}")
+    print(f"格式化报告已生成：{rel(REPORT_MD)}（Status: {status}）")
+    if status == "DEGRADED":
+        # CR-7：退化必须在控制台同样显著可见，不再静默 GENERATED
+        if not _FORMULA_AVAILABLE:
+            print("[DEGRADED] 公式引擎不可用（latex_to_omml/pandoc 缺失），全部公式退化为 Cambria Math 纯文本，非 Word 原生 OMML。")
+        else:
+            print(f"[DEGRADED] {_OMML_STATS['fallback']}/{_OMML_STATS['total']} 个公式 OMML 转换失败，退化为纯文本。")
+    if stats.get("failures"):
+        print(f"[RENDER FAILURES] {len(stats['failures'])} 条（路径拒绝/索引未命中/文件缺失），详见报告 Failures 节。")
     if draft_mode:
         print("[DRAFT MODE] 该文件不是最终稿；正式提交前必须先通过证据门禁，再不带 --allow-draft 重跑本脚本。")
     return 0

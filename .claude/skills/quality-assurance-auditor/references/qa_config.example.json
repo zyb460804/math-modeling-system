@@ -1,12 +1,13 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "problem_name": "绿电直连型合成氨园区（旧赛题，2026-06）",
-  "_note": "本文件仅是 qa_config.json 的 schema 示例，全部数值属于旧赛题「绿电直连型合成氨」。换新赛题时：复制本文件到 paper_output/plan/qa_config.json，按新赛题重写所有段；4 个 QA 脚本（run_baseline_comparison / run_sensitivity_analysis / check_parameter_consistency / check_result_reasonableness）在该文件或所需段缺失时输出 SKIP，绝不输出 PASS。",
+  "_note": "本文件仅是 qa_config.json 的 schema 示例，全部数值属于旧赛题「绿电直连型合成氨」。换新赛题时：复制本文件到 paper_output/plan/qa_config.json，按新赛题重写所有段；5 个 QA 脚本（run_baseline_comparison / run_sensitivity_analysis / check_parameter_consistency / check_result_reasonableness / check_number_consistency）在该文件或所需段缺失时输出 SKIP，绝不输出 PASS。",
   "_consumers": {
     "run_baseline_comparison.py": ["data_files", "columns(可选)", "model_params", "price_periods", "om_coeffs", "production"],
     "run_sensitivity_analysis.py": ["data_files", "columns(可选)", "model_params", "price_periods", "om_coeffs", "production", "sensitivity"],
     "check_parameter_consistency.py": ["expected_params", "param_tolerance(可选)"],
-    "check_result_reasonableness.py": ["reasonable_ranges", "green_constraints(可选)", "green_constraints_apply_to(可选)"]
+    "check_result_reasonableness.py": ["reasonable_ranges", "green_constraints(可选)", "green_constraints_apply_to(可选)"],
+    "check_number_consistency.py": ["number_consistency"]
   },
   "data_files": {
     "_note": "相对 paper_output/data_cleaned/ 的清洗后数据文件名",
@@ -124,5 +125,18 @@
     "green_ratio": [0.30, ">=", "总用电量绿电比例应>30%"],
     "feed_in_ratio": [0.20, "<=", "新能源上网电量比例应<20%"]
   },
-  "green_constraints_apply_to": ["Q1"]
+  "green_constraints_apply_to": ["Q1"],
+  "number_consistency": {
+    "_note": "数字一致性检查（check_number_consistency.py）：按问编号声明关键数字——pattern=论文侧正则（第1捕获组为数字，匹配论文正文中的表述），json_path=代码侧取值路径（点号分隔，相对 paper_output/results/{qi}_results.json），scale=换算系数（比率0-1折算成百分比时为100，缺省1）。论文引用了某关键数字但代码结果文件/字段缺失时记 CODE_SOURCE_MISSING 不一致（fail-closed）。缺本段时该脚本输出 SKIP（退出码 0），绝不输出 PASS；本示例条目沿用旧赛题「绿电直连」Q1 的 8 个字段。",
+    "Q1": {
+      "E_load_kWh": {"pattern": "日用电量[为：:]\\s*([\\d,]+)\\s*kWh", "unit": "kWh", "json_path": "results.energy.E_load_kWh", "scale": 1.0},
+      "E_re_kWh": {"pattern": "新能源发电量[为：:]\\s*([\\d,]+)\\s*kWh", "unit": "kWh", "json_path": "results.energy.E_re_kWh", "scale": 1.0},
+      "E_buy_kWh": {"pattern": "网购电量[为：:]\\s*([\\d,]+)\\s*kWh", "unit": "kWh", "json_path": "results.energy.E_buy_kWh", "scale": 1.0},
+      "E_sell_kWh": {"pattern": "上网电量[为：:]\\s*([\\d,]+)\\s*kWh", "unit": "kWh", "json_path": "results.energy.E_sell_kWh", "scale": 1.0},
+      "self_use_ratio": {"pattern": "自发自用比例[为为]\\s*([\\d.]+)%", "unit": "%", "json_path": "results.indicators.self_use_ratio", "scale": 100.0},
+      "green_ratio": {"pattern": "绿电比例[为为]\\s*([\\d.]+)%", "unit": "%", "json_path": "results.indicators.green_ratio", "scale": 100.0},
+      "feed_in_ratio": {"pattern": "上网比例[为为]\\s*([\\d.]+)%", "unit": "%", "json_path": "results.indicators.feed_in_ratio", "scale": 100.0},
+      "ton_nh3_cost": {"pattern": "\\|\\s*吨氨成本\\s*\\|\\s*([\\d,]+)\\s*元/吨", "unit": "元/吨", "json_path": "results.cost.ton_nh3_cost_yuan", "scale": 1.0}
+    }
+  }
 }

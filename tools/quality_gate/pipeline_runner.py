@@ -1,16 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""PIPELINE RUNNER — 一键流水线调度器（v4.9）
+"""PIPELINE RUNNER — 一键流水线调度器（v4.9 + CR-5/G-05 修复）
 
 把 paper-workflow-orchestrator 的路由逻辑代码化：
   - 脚本型环节（门禁/审计/格式）：自动 subprocess 跑，PASS 才推进
   - 认知型环节（审题/写作/盲评）：输出 AGENT_HANDOFF 指令，交 Agent 接力
   - 状态推进：复用 pipeline_manager.py 的 pipeline.json（GitOps 状态机）
 
-设计哲学：
-  脚本环节无感通过（不会再被 Agent 疏忽跳过）
-  认知环节保留 LLM 判断质量（不强行脚本化）
-  Agent 接力点明确（runner 停下输出指令，Agent 干完重跑 runner）
+v4.9.1（CR-5 / G-05 / G-07 修复）：
+  - check_produces 强化：目录型 produce 必须非空；JSON 型 produce 必须 ≥10 字节且
+    json.loads 可解析（坏 JSON = 未完成）
+  - 脚本阶段三态展示：PASS / SKIP / WARN / FAIL。SKIP 由子脚本 stdout 的
+    "SKIP：" / "[skip]" 行或其报告 JSON 的 status 字段识别（SKIP≠PASS，绝不混显）
+  - 含 SKIP 的阶段：状态记 "skipped"（pipeline_manager 已知状态），推进不阻断，
+    但汇总行注明"含 N 项 SKIP"；全流水线完成时若有 SKIP 阶段，不再打 "🎉 全流水线 approved"
+  - --stage 传未知 ID：argparse 直接报错退出码 2，不再落到 "🎉 全流水线 approved"
+  - championship 接线（v4.9 文档承诺兑现）：
+      * 【脚本强制】check_numeric_sanity.py → S5 子步骤
+      * 【脚本强制】freshness_check.py check → S8 终检前
+      * 【证据文件存在性检查】blind-panel 聚合报告 qa/blind_panel_report.json →
+        S8 产物缺失则该阶段不得 approved（rc=2 转 Agent 接力）
+      * 【仅 handoff 提示，未脚本接线】figqa 碰撞门为 live matplotlib 检测，
+        无离线批量模式，不硬接脚本，在 S4/S6 handoff 与 S8 输出中显式列出
+  - 状态文件向后兼容：stage id 只增不改；新增字段（skip_count/skipped_steps）只增
 
 用法：
   python tools/quality_gate/pipeline_runner.py init              # 初始化流水线
@@ -21,7 +33,7 @@
 退出码：
   0 = 当前批次推进完成（全 approved，或脚本阶段 PASS）
   1 = 有门禁 FAIL（需 Agent 修复后重跑）
-  2 = 到 Agent 接力点（等 Agent 完成 + 用户决策后重跑）
+  2 = 到 Agent 接力点（等 Agent 完成 + 用户决策后重跑）；也用于 --stage 非法参数
 """
 from __future__ import annotations
 
@@ -48,10 +60,20 @@ TOOLS_QG = WORK_DIR / "tools" / "quality_gate"
 QA_SCRIPTS = SKILLS_DIR / "quality-assurance-auditor" / "scripts"
 PY = sys.executable
 
+# ── 三态分类词汇（CR-5）──
+# 子脚本 rc=0 时：stdout 出现以 skip/[skip] 开头的行，或报告 JSON status 命中 SKIP 词表 → SKIP
+SKIP_STATUSES = {"SKIP", "SKIPPED"}
+# 报告 JSON status 命中 WARN 词表（rc=0）→ WARN（可见但不阻断）
+WARN_STATUSES = {"WARN", "WARNING", "DEGRADED", "STALE"}
+# 状态机里"已越过"的状态：approved=真通过；skipped=带 SKIP 推进（≠通过）
+ADVANCED_STATUSES = {"approved", "skipped"}
+
 
 # ── 阶段定义（对齐 pipeline_manager.py STAGE_ORDER）──
 # type=script  → runner 自动 subprocess 跑，PASS 才推进
 # type=agent   → runner 输出 AGENT_HANDOFF，交 Agent 接力（产出齐备后下次自动推进）
+# produces     → 目录型要求非空；文件型要求 ≥10 字节，.json 还要求可解析
+# scripts[].report → 相对 paper_output/ 的报告 JSON 路径（读 status 字段做三态分类）
 STAGES: list[dict] = [
     {
         "id": "S1_problem_analysis",
@@ -87,7 +109,7 @@ STAGES: list[dict] = [
         "name": "代码生成",
         "type": "agent",
         "skills": ["data-cleaning-and-visualization", "model-code-and-result-generator", "feature-engineering"],
-        "produces": ["code/modeling"],  # 目录存在即可
+        "produces": ["code/modeling"],  # 目录型 produce：必须存在且非空（空目录≠完成）
         "handoff": (
             "【代码生成】\n"
             "1. 查 resources/04_代码模板/ + resources/10_算法cookbook/，写 plan/code_reuse_check.md（G5.3 代码复用门）\n"
@@ -124,13 +146,22 @@ STAGES: list[dict] = [
         "id": "S5_evidence_gate",
         "name": "证据门禁（G5 总门）",
         "type": "script",
+        # check_numeric_sanity 为 v4.9 championship 接线【脚本强制】（CR-9 遗留接线项）
         "scripts": [
-            {"cmd": [PY, str(QA_SCRIPTS / "evidence_gate.py"), "--mode", "official"], "label": "G5 evidence_gate"},
-            {"cmd": [PY, str(QA_SCRIPTS / "check_parameter_consistency.py")], "label": "参数一致性"},
-            {"cmd": [PY, str(QA_SCRIPTS / "check_result_reasonableness.py")], "label": "结果合理性"},
-            {"cmd": [PY, str(QA_SCRIPTS / "check_number_consistency.py")], "label": "数字一致性"},
+            {"cmd": [PY, str(QA_SCRIPTS / "evidence_gate.py"), "--mode", "official"], "label": "G5 evidence_gate",
+             "report": "qa/evidence_gate_report.json"},
+            {"cmd": [PY, str(QA_SCRIPTS / "check_parameter_consistency.py")], "label": "参数一致性",
+             "report": "qa/parameter_consistency_report.json"},
+            {"cmd": [PY, str(QA_SCRIPTS / "check_result_reasonableness.py")], "label": "结果合理性",
+             "report": "qa/result_reasonableness_report.json"},
+            {"cmd": [PY, str(QA_SCRIPTS / "check_number_consistency.py")], "label": "数字一致性",
+             "report": "qa/number_consistency_report.json"},
+            {"cmd": [PY, str(QA_SCRIPTS / "check_numeric_sanity.py")], "label": "数值合理性（inf/nan/量级，championship 接线）",
+             "report": "qa/numeric_sanity_report.json"},
         ],
     },
+]
+STAGES += [
     {
         "id": "S6_paper_writing",
         "name": "正式写作",
@@ -143,7 +174,13 @@ STAGES: list[dict] = [
             "2. 调 paper-formal-writer 出大纲 → Agent 全局写作 final_paper_source.md\n"
             "3. 调 humanizer-zh-academic 降AI味（G5.5 门，≥58/60）→ 生成 qa/humanizer_report.json\n"
             "4. 调 citation-tracer 引用验证（G5.8 门）\n"
-            "5. 调 ai-failure-checker AI失败模式检查（G5.7 门，blocking=0）"
+            "5. 调 ai-failure-checker AI失败模式检查（G5.7 门，blocking=0）\n"
+            "6. 🏆 championship 必做项（v4.9 默认模式）：\n"
+            "   - figqa 碰撞门：live matplotlib 检测（无离线批量模式，此处不接脚本）——出图脚本内调用 "
+            "assert_no_overlap(fig)（from .claude/skills/math-figure/scripts/figqa import assert_no_overlap），"
+            "或提交前用 math-figure/scripts/pdf_qa.sh 复核编译 PDF\n"
+            "   - blind-panel 3 座盲评将在 S8 终检前验收（qa/blind_panel_report.json 缺失则 S8 不得 approved），"
+            "建议本阶段完稿后即启动（输入 final_paper.docx/PDF + 产物清单）"
         ),
     },
     {
@@ -158,10 +195,29 @@ STAGES: list[dict] = [
     },
     {
         "id": "S8_final_qa",
-        "name": "最终QA（一键终检 + skill 调用门）",
+        "name": "最终QA（一键终检 + skill 调用门 + championship）",
         "type": "script",
+        # freshness_check 为 v4.9 championship 接线【脚本强制】，置于终检前：
+        # 源（赛题/代码）变化后旧 qa 报告标记 STALE，须重生成再终检
         "scripts": [
-            {"cmd": [PY, str(TOOLS_QG / "final_gate_runner.py")], "label": "FINAL_GATE_RUNNER（实物+自证+证据+数字+公式+图片+skill）"},
+            {"cmd": [PY, str(SKILLS_DIR / "context-memory-keeper" / "scripts" / "freshness_check.py"), "check"],
+             "label": "报告新鲜度 SHA-256（championship 接线，STALE 报告须重生成）"},
+            {"cmd": [PY, str(TOOLS_QG / "final_gate_runner.py")], "label": "FINAL_GATE_RUNNER（实物+自证+证据+数字+公式+图片+skill）",
+             "report": "qa/final_gate_report.json"},
+        ],
+        # championship 证据文件存在性检查（非脚本强制：只验产物存在与基本形态，
+        # 不替 blind-panel skill 跑盲评——盲评本体是认知环节，由 Agent 调 skill 完成）
+        "championship_evidence": [
+            {
+                "file": "qa/blind_panel_report.json",
+                "item": "blind-panel 3 座盲评聚合报告（skill 定义产物：seats A/B/C + verdict）",
+                "how": "调 blind-panel skill：3 座并行盲评 → Lead 聚合写 paper_output/qa/blind_panel_report.json（见 .claude/skills/blind-panel/SKILL.md）",
+            },
+        ],
+        # figqa 无离线批量检查模式（live matplotlib import 门），不硬接脚本，仅在此显式提示
+        "championship_handoff_only": [
+            "figqa 碰撞门：出图时 assert_no_overlap(fig)（.claude/skills/math-figure/scripts/figqa.py）——live 检测无法离线重放，需在出图阶段（S4/S6）执行",
+            "4 层反馈 L1-L4（L1 阶段 Critic / L2 跨阶段回检 / L3 Panel / L4 证据校准）：认知环节，由 Agent 按 qa-auditor feedback_layer1-4 参考文档执行，状态机不强制",
         ],
     },
 ]
@@ -192,22 +248,47 @@ def set_stage_status(state: dict, stage_id: str, status: str) -> None:
     save_state(state)
 
 
-# ── 产出检查（判断 agent 阶段是否完成）──
-def check_produces(stage: dict) -> bool:
+# ── 产出检查（判断 agent 阶段是否完成；CR-5 强化）──
+def check_produces(stage: dict) -> tuple[bool, list[str]]:
+    """返回 (是否齐备, 未达标清单)。
+
+    强化点（CR-5 / G-05）：
+      - 目录型 produce：必须存在且非空（空目录 = 未完成）
+      - 文件型 produce：≥10 字节；.json 还必须 json.loads 成功（坏 JSON = 未完成）
+    """
     produces = stage.get("produces", [])
     if not produces:
-        return False
+        return False, ["该阶段未定义 produces，无法判定完成"]
+    problems: list[str] = []
     for p in produces:
         path = OUTPUT_DIR / p
         if not path.exists():
-            return False
-        if path.is_file() and path.stat().st_size < 10:
-            return False
-    return True
+            problems.append(f"{p}: 不存在")
+            continue
+        if path.is_dir():
+            try:
+                empty = not any(path.iterdir())
+            except OSError as exc:
+                problems.append(f"{p}: 目录不可读（{exc}）")
+                continue
+            if empty:
+                problems.append(f"{p}: 目录为空（空目录 ≠ 完成）")
+            continue
+        size = path.stat().st_size
+        if size < 10:
+            problems.append(f"{p}: 文件 {size} 字节 < 10（疑似空壳）")
+            continue
+        if path.suffix.lower() == ".json":
+            try:
+                json.loads(path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                problems.append(f"{p}: JSON 不可解析（坏 JSON = 未完成）：{exc}")
+    return (not problems), problems
 
 
 # ── 脚本执行 ──
-def run_one_script(cmd: list[str], label: str) -> tuple[bool, str]:
+def run_one_script(cmd: list[str], label: str) -> tuple[int, str, str]:
+    """执行一个子脚本，返回 (returncode, stdout, 输出尾部)。"""
     print(f"  ▶ {label}")
     try:
         proc = subprocess.run(
@@ -216,9 +297,95 @@ def run_one_script(cmd: list[str], label: str) -> tuple[bool, str]:
             cwd=str(WORK_DIR), timeout=900,
         )
     except Exception as exc:
-        return False, f"执行异常: {exc}"
-    tail = ((proc.stdout or "") + (proc.stderr or ""))[-500:]
-    return proc.returncode == 0, tail
+        return 1, "", f"执行异常: {exc}"
+    out = proc.stdout or ""
+    tail = (out + (proc.stderr or ""))[-500:]
+    return proc.returncode, out, tail
+
+
+def _report_status(report_rel: str | None) -> str | None:
+    """读子脚本报告 JSON 的 status 字段（相对 paper_output/）；读不到返回 None。"""
+    if not report_rel:
+        return None
+    path = OUTPUT_DIR / report_rel
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if isinstance(data, dict):
+        raw = str(data.get("status", "")).strip()
+        return raw.upper() or None
+    return None
+
+
+def classify_script_result(rc: int, stdout: str, script: dict) -> tuple[str, str]:
+    """把子脚本运行结果分类为 PASS / SKIP / WARN / FAIL（CR-5 三态展示）。
+
+    SKIP 识别（缺 qa_config 场景实测）：
+      - check_parameter_consistency / check_result_reasonableness 在缺配置时
+        stdout 打印 "SKIP：<原因>" 且 rc=0，报告 JSON status="SKIP"
+      - check_numeric_sanity 在结果目录缺失时 stdout 打印 "[skip] ..." 且 rc=0
+    """
+    if rc != 0:
+        return "FAIL", ""
+    for ln in stdout.splitlines():
+        low = ln.strip().lower()
+        if low.startswith("skip") or low.startswith("[skip]"):
+            return "SKIP", ln.strip()
+    status = _report_status(script.get("report"))
+    if status in SKIP_STATUSES:
+        return "SKIP", f"报告 status={status}"
+    if status in WARN_STATUSES:
+        return "WARN", f"报告 status={status}"
+    return "PASS", ""
+
+
+# ── championship 证据检查（存在性检查，非脚本强制）──
+def championship_missing_evidence(stage: dict) -> list[tuple[dict, str]]:
+    """检查 championship_evidence 声明的产物文件。返回 [(evidence, 原因)]。"""
+    missing: list[tuple[dict, str]] = []
+    for ev in stage.get("championship_evidence", []):
+        path = OUTPUT_DIR / ev["file"]
+        if not path.exists():
+            missing.append((ev, "文件不存在"))
+            continue
+        size = path.stat().st_size
+        if size < 10:
+            missing.append((ev, f"文件仅 {size} 字节（疑似占位）"))
+            continue
+        if path.suffix.lower() == ".json":
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                missing.append((ev, f"JSON 不可解析：{exc}"))
+                continue
+            # blind-panel skill 定义的聚合 schema：seats（≥3 座）+ verdict
+            seats = data.get("seats") if isinstance(data, dict) else None
+            if not isinstance(seats, dict) or len(seats) < 3:
+                missing.append((ev, "JSON 缺 seats（不足 3 座）——不符合 blind-panel 聚合 schema"))
+            elif "verdict" not in data:
+                missing.append((ev, "JSON 缺 verdict 字段——不符合 blind-panel 聚合 schema"))
+    return missing
+
+
+def print_championship_handoff(stage: dict, missing: list[tuple[dict, str]]) -> None:
+    print(f"\n❌ [{stage['id']}] championship 证据缺失 — 该阶段不得 approved（v4.9 championship 为默认模式）")
+    for ev, why in missing:
+        print(f"    缺: {ev['file']}（{why}）")
+        print(f"      用途: {ev['item']}")
+        print(f"      做法: {ev['how']}")
+    only_notes = stage.get("championship_handoff_only", [])
+    if only_notes:
+        print(f"\n{'─' * 60}")
+        print(">>> championship 必做项（无脚本可强制，需 Agent/人工执行）<<<")
+        for line in only_notes:
+            print(f"  • {line}")
+        print(f"{'─' * 60}")
+    print(f"\n{'─' * 60}")
+    print(">>> AGENT_HANDOFF：完成上述 championship 必做项后重新运行 pipeline_runner.py <<<")
+    print(f"{'─' * 60}\n")
 
 
 def run_script_stage(stage: dict) -> int:
@@ -226,19 +393,52 @@ def run_script_stage(stage: dict) -> int:
     state = load_state()
     set_stage_status(state, stage["id"], "in_progress")
 
+    n_pass = n_skip = n_warn = 0
+    skipped_steps: list[str] = []
     for s in stage["scripts"]:
-        ok, tail = run_one_script(s["cmd"], s["label"])
-        if ok:
-            print(f"    ✅ PASS")
-        else:
-            print(f"    ❌ FAIL")
+        rc, out, tail = run_one_script(s["cmd"], s["label"])
+        status, note = classify_script_result(rc, out, s)
+        if status == "PASS":
+            n_pass += 1
+            print("    ✅ PASS")
+        elif status == "SKIP":
+            n_skip += 1
+            skipped_steps.append(s["label"])
+            print(f"    ⏭️ SKIP — 未实际检查（≠ PASS）：{note[:200] or '子脚本显式跳过'}")
+        elif status == "WARN":
+            n_warn += 1
+            print(f"    ⚠️ WARN — {note[:200]}")
+        else:  # FAIL
+            print("    ❌ FAIL")
             print(f"       输出尾部: {tail[-400:]}")
             set_stage_status(load_state(), stage["id"], "rework")
             print(f"\n❌ [{stage['id']}] 门禁未通过 — 请 Agent 修复后重跑 pipeline_runner.py")
             return 1
 
-    set_stage_status(load_state(), stage["id"], "approved")
-    print(f"✅ [{stage['id']}] approved — 推进下一阶段")
+    # championship 证据文件存在性检查（非脚本强制；无产物 → 不得 approved）
+    missing = championship_missing_evidence(stage)
+    if missing:
+        set_stage_status(load_state(), stage["id"], "in_progress")
+        print_championship_handoff(stage, missing)
+        return 2
+
+    state = load_state() or {}
+    entry = state.setdefault("stages", {}).setdefault(stage["id"], {})
+    if n_skip > 0:
+        # 总体标 SKIP：可见、不阻断、≠ approved；新增字段只增不改（向后兼容）
+        entry["status"] = "skipped"
+        entry["skip_count"] = n_skip
+        entry["skipped_steps"] = skipped_steps
+        save_state(state)
+        print(f"⏭️ [{stage['id']}] 推进 — 含 {n_skip} 项 SKIP（SKIP≠PASS；"
+              f"补齐 paper_output/plan/qa_config.json 等配置后可 --stage {stage['id']} 重跑补查）")
+    else:
+        entry["status"] = "approved"
+        save_state(state)
+        if n_warn:
+            print(f"⚠️ [{stage['id']}] approved — 含 {n_warn} 项 WARN（见上）")
+        else:
+            print(f"✅ [{stage['id']}] approved — 推进下一阶段")
     return 0
 
 
@@ -254,7 +454,7 @@ def agent_handoff(stage: dict) -> int:
     print(f"\n  调用 skill: {', '.join(stage.get('skills', []))}")
     if stage.get("decision_gate"):
         print(f"  🚪 用户决策门: {stage['decision_gate']}")
-    print(f"\n{'─'*60}")
+    print(f"{'─'*60}")
     print(f">>> 完成后重新运行: python tools/quality_gate/pipeline_runner.py <<<")
     print(f"{'─'*60}\n")
     return 2
@@ -267,18 +467,25 @@ def print_status() -> int:
         print(f"[runner] 流水线未初始化，请先: python tools/quality_gate/pipeline_runner.py init")
         return 1
     print(f"\n{'═'*60}\n  PIPELINE STATUS（v4.9）\n{'═'*60}")
-    sym = {"not_started": "·", "in_progress": "▶", "approved": "✓", "rework": "↩", "skipped": "—"}
+    sym = {"not_started": "·", "in_progress": "▶", "approved": "✓", "rework": "↩", "skipped": "⏭"}
     for s in STAGES:
         st = stage_status(state, s["id"])
         typ = "脚本" if s["type"] == "script" else "Agent"
-        print(f"  {sym.get(st, '?')} [{s['id']}] {s['name']}  ({typ})")
+        note = ""
+        if st == "skipped":
+            n = state.get("stages", {}).get(s["id"], {}).get("skip_count")
+            note = f"  ⏭ 含 {n} 项 SKIP（未检查≠通过）" if n else "  ⏭ 含 SKIP（未检查≠通过）"
+        print(f"  {sym.get(st, '?')} [{s['id']}] {s['name']}  ({typ}){note}")
     approved = sum(1 for s in STAGES if stage_status(state, s["id"]) == "approved")
+    skipped = sum(1 for s in STAGES if stage_status(state, s["id"]) == "skipped")
     print(f"{'─'*60}")
-    print(f"  进度: {approved}/{len(STAGES)} approved")
-    if approved < len(STAGES):
-        nxt = next((s for s in STAGES if stage_status(state, s["id"]) != "approved"), None)
-        if nxt:
-            print(f"  下一步: [{nxt['id']}] {nxt['name']} ({'脚本自动' if nxt['type']=='script' else 'Agent 接力'})")
+    line = f"  进度: {approved}/{len(STAGES)} approved"
+    if skipped:
+        line += f"，另有 {skipped} 个阶段含 SKIP（未检查≠通过）"
+    print(line)
+    nxt = next((s for s in STAGES if stage_status(state, s["id"]) not in ADVANCED_STATUSES), None)
+    if nxt:
+        print(f"  下一步: [{nxt['id']}] {nxt['name']} ({'脚本自动' if nxt['type']=='script' else 'Agent 接力'})")
     return 0
 
 
@@ -314,7 +521,10 @@ def main() -> int:
     ap.add_argument("command", nargs="?", default="run",
                     choices=["run", "init", "status"],
                     help="init=初始化 / status=看状态 / run=推进（默认）")
-    ap.add_argument("--stage", help="只跑指定阶段（如 S5_evidence_gate）")
+    # CR-5 修复：未知 stage id 由 argparse 直接拒绝（退出码 2），
+    # 不会再落进 "🎉 全流水线 approved" 分支；显式 --stage 时已 approved/skipped 的阶段也会重跑
+    ap.add_argument("--stage", choices=[s["id"] for s in STAGES],
+                    help="只跑指定阶段（如 S5_evidence_gate）")
     args = ap.parse_args()
 
     if args.command == "init":
@@ -327,26 +537,37 @@ def main() -> int:
         print(f"[runner] 流水线未初始化，请先: python tools/quality_gate/pipeline_runner.py init")
         return 1
 
-    # 找下一个未 approved 的阶段
+    # 找下一个未 approved 的阶段（skipped = 带 SKIP 推进过，视为已越过，可 --stage 重跑补查）
     for stage in STAGES:
         sid = stage["id"]
         if args.stage and sid != args.stage:
             continue
         st = stage_status(state, sid)
-        if st == "approved":
+        if st in ADVANCED_STATUSES and not args.stage:
             continue
 
         if stage["type"] == "script":
             return run_script_stage(stage)
         else:  # agent
             # 产出齐备 → 自动推进（Agent 已经在上一轮做完了）
-            if check_produces(stage):
+            ok, problems = check_produces(stage)
+            if ok:
                 set_stage_status(load_state(), sid, "approved")
                 print(f"✅ [{sid}] 产出已齐备 — 自动推进")
                 continue
+            for p in problems:
+                print(f"  ✗ 产出未达标: {p}")
             return agent_handoff(stage)
 
-    print(f"\n🎉 全流水线 approved — 所有 {len(STAGES)} 阶段通过")
+    state = load_state() or {}
+    skipped_stages = [s["id"] for s in STAGES if stage_status(state, s["id"]) == "skipped"]
+    if skipped_stages:
+        # 谨慎口径：SKIP ≠ PASS，存在 SKIP 时不打 "全流水线 approved"
+        print(f"\n⚠️ 流水线推进完成 — 但 {len(skipped_stages)} 个阶段含 SKIP：{', '.join(skipped_stages)}")
+        print(f"    SKIP = 未实际检查（多为缺 paper_output/plan/qa_config.json 等配置），不等于通过；")
+        print(f"    补齐配置后运行: python tools/quality_gate/pipeline_runner.py --stage <阶段ID> 重跑补查")
+    else:
+        print(f"\n🎉 全流水线 approved — 所有 {len(STAGES)} 阶段通过")
     print(f"    最终交付: paper_output/final_paper.docx + code/ + figures/ + 答辩材料")
     return 0
 

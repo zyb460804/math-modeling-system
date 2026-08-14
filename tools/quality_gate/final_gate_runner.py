@@ -20,6 +20,9 @@
     python final_gate_runner.py --workdir E:/数学建模    # 系统门禁脚本的运行目录
 
 退出码：0 = 全部通过；1 = 有 failures（不得宣称可提交/可答辩/可复现）。
+
+fail-closed 原则（CR-2）：任何被依赖的检查器脚本缺失 → 对应门记 pass=False 并使整体 FAIL，
+不做"未找到，跳过"的无痕放行；显式 --skip-* 旗标是唯一合法跳过途径。
 """
 from __future__ import annotations
 
@@ -126,45 +129,76 @@ def main() -> int:
     ap.add_argument("--skip-evidence", action="store_true", help="跳过证据门（无 model_route.json 时可加）")
     args = ap.parse_args()
 
-    paper_dir = Path(args.paper_dir)
+    paper_dir = Path(args.paper_dir).resolve()  # H-11：先 resolve，rglob/子进程全部走绝对路径
     workdir = Path(args.workdir).resolve()
     here = Path(__file__).resolve().parent
     scripts = workdir / ".claude" / "skills" / "quality-assurance-auditor" / "scripts"
-    sk_verify = workdir / ".claude" / "skills" / "quality-assurance-auditor" / "scripts" / "verify_gate.py"
     py = sys.executable
 
     steps: list[dict] = []
-    def add(name: str, cmd: list[str], cwd: Path, fail_rcs: set[int] = {1, 2}):
+    def add(name: str, cmd: list[str], cwd: Path):
         r = run(cmd, cwd)
-        ok = r["rc"] in (0,) or (r["rc"] == 2 and cmd[-1] == "--fix-missing")
-        steps.append({"gate": name, "cmd": r["cmd"], "rc": r["rc"], "pass": ok,
+        steps.append({"gate": name, "cmd": r["cmd"], "rc": r["rc"], "pass": r["rc"] == 0,
                       "out_tail": r["out"], "err_tail": r["err"]})
-        return r
 
     # 1) 实物门
     add("G4.7_ARTIFACT_GATE", [py, str(here / "paper_artifact_check.py"), "--paper-dir", str(paper_dir)], workdir)
-    # 2) 代码自证门：作品目录内 有代码必须配 verify_*.py 并全部 PASS（防空转绕过）
-    code_files = [f for f in paper_dir.rglob("*.py") if f.is_file()
-                  and "qa" not in f.parts and "quality_gate" not in f.parts and "__pycache__" not in f.parts]
+    # 2) 代码自证门：作品目录内有代码必须配 verify_*.py 并全部 PASS（防空转绕过）
+    #    模型↔verify 对应关系校验与 verify_gate.py 共用同一实现：
+    #    sys.path 插入 quality-assurance-auditor/scripts 后 import missing_verify_for_models，
+    #    勿在两处各写一份 —— 互指：.claude/skills/quality-assurance-auditor/scripts/verify_gate.py
+    #    （排除规则按相对 paper_dir 的路径段判断，只跳过作品自带的 qa/quality_gate 工具代码，
+    #     不受作品目录恰好放在某个名为 qa 的祖先目录下影响）
+    code_files = []
+    for f in paper_dir.rglob("*.py"):
+        if not f.is_file():
+            continue
+        rel_parts = f.relative_to(paper_dir).parts
+        if "qa" in rel_parts or "quality_gate" in rel_parts or "__pycache__" in rel_parts:
+            continue
+        code_files.append(f)
     verify_files = [f for f in paper_dir.rglob("verify_*.py") if f.is_file()]
+    modeling_dir = paper_dir / "code" / "modeling"
+    models = (sorted(m for m in modeling_dir.glob("*.py") if not m.name.startswith("_"))
+              if modeling_dir.exists() else [])
+    try:
+        sys.path.insert(0, str(scripts))
+        from verify_gate import missing_verify_for_models
+    except Exception as exc:
+        missing_verify_for_models = None
+        vg_import_err = str(exc)
     if not code_files:
         steps.append({"gate": "G4.6_VERIFY_GATE", "cmd": "N/A", "rc": 0, "pass": True,
                       "out_tail": "作品目录无代码（由 G4.7 实物门判 FAIL）", "err_tail": ""})
+    elif missing_verify_for_models is None:
+        # 检查器（共享校验函数）不可用 = FAIL（fail-closed，同 CR-2 原则）
+        steps.append({"gate": "G4.6_VERIFY_GATE", "cmd": "N/A", "rc": 1, "pass": False,
+                      "out_tail": f"verify_gate.py 不可导入，无法执行模型↔verify 对应关系校验（fail-closed）: {vg_import_err}", "err_tail": ""})
     elif not verify_files:
         steps.append({"gate": "G4.6_VERIFY_GATE", "cmd": "N/A", "rc": 2, "pass": False,
                       "out_tail": f"发现 {len(code_files)} 个代码文件但无 verify_*.py 自证脚本——模型结果未经自证不得写入论文", "err_tail": ""})
     else:
         vouts = []
         all_pass = True
+        # 对应关系校验（CR-3）：每个 code/modeling/*.py 必须配 verify_{模型名}.py
+        missing = missing_verify_for_models(models, verify_files)
+        if missing:
+            all_pass = False
+            vouts.append(f"模型↔verify 对应缺失（{len(missing)}/{len(models)}）: {', '.join(missing)} —— 每个模型必须配 verify_{{模型名}}.py")
         for vf in verify_files:
+            # vf 已是绝对路径（paper_dir 先 resolve），cwd=脚本所在目录 —— H-11：消除"相对路径+子目录 cwd"的 ENOENT 假 FAIL
             r = run([py, str(vf)], vf.parent)
             all_pass = all_pass and r["rc"] == 0
             vouts.append(f"{vf.name}: {'PASS' if r['rc']==0 else 'FAIL'} (rc={r['rc']})")
         steps.append({"gate": "G4.6_VERIFY_GATE", "cmd": "run verify_*.py", "rc": 0 if all_pass else 1,
                       "pass": all_pass, "out_tail": "\n".join(vouts), "err_tail": ""})
-    # 3) 证据门（official）
-    if not args.skip_evidence and (scripts / "evidence_gate.py").exists():
-        add("G5_EVIDENCE_GATE", [py, str(scripts / "evidence_gate.py"), "--mode", "official"], workdir)
+    # 3) 证据门（official）—— 检查器缺失 = FAIL（fail-closed），显式 --skip-evidence 是唯一合法跳过
+    if not args.skip_evidence:
+        if (scripts / "evidence_gate.py").exists():
+            add("G5_EVIDENCE_GATE", [py, str(scripts / "evidence_gate.py"), "--mode", "official"], workdir)
+        else:
+            steps.append({"gate": "G5_EVIDENCE_GATE", "cmd": "N/A", "rc": 1, "pass": False,
+                          "out_tail": "evidence_gate.py 未找到（fail-closed）——检查器缺失=FAIL，唯一合法跳过途径是显式 --skip-evidence", "err_tail": ""})
     # 4) 数字一致性（通用提取）
     info, warns = generic_number_check(paper_dir)
     num_fail = any(w.startswith("FAIL_P0") for w in warns)
@@ -185,8 +219,9 @@ def main() -> int:
         steps.append({"gate": "G4.10_IMAGE_EMBED_GATE", "cmd": r_img["cmd"], "rc": r_img["rc"],
                       "pass": img_pass, "out_tail": r_img["out"], "err_tail": r_img["err"]})
     else:
-        steps.append({"gate": "G4.10_IMAGE_EMBED_GATE", "cmd": "N/A", "rc": 0, "pass": True,
-                      "out_tail": "image_embed_check.py 未找到，跳过", "err_tail": ""})
+        # CR-2：检查器缺失 = FAIL（原为 pass=True"未找到，跳过"的无痕放行）
+        steps.append({"gate": "G4.10_IMAGE_EMBED_GATE", "cmd": "N/A", "rc": 1, "pass": False,
+                      "out_tail": "image_embed_check.py 未找到（fail-closed）——检查器缺失=FAIL", "err_tail": ""})
     # 7) Skill 调用强制门（v4.8 新增）：检查必调 skill 是否真调过
     #    背景：规范要求 Agent 必须调 humanizer/review/defense 等 skill，但原门禁不查
     #    FAIL（rc=1）阻断提交；WARN（rc=2）不阻断但提示覆盖率低
@@ -197,8 +232,9 @@ def main() -> int:
         steps.append({"gate": "G5_SKILL_INVOCATION_GATE", "cmd": r_skill["cmd"], "rc": r_skill["rc"],
                       "pass": skill_pass, "out_tail": r_skill["out"][-1500:], "err_tail": r_skill["err"]})
     else:
-        steps.append({"gate": "G5_SKILL_INVOCATION_GATE", "cmd": "N/A", "rc": 0, "pass": True,
-                      "out_tail": "skill_invocation_gate.py 未找到，跳过", "err_tail": ""})
+        # CR-2：检查器缺失 = FAIL（原为 pass=True"未找到，跳过"的无痕放行）
+        steps.append({"gate": "G5_SKILL_INVOCATION_GATE", "cmd": "N/A", "rc": 1, "pass": False,
+                      "out_tail": "skill_invocation_gate.py 未找到（fail-closed）——检查器缺失=FAIL", "err_tail": ""})
 
     # 汇总
     failed = [s for s in steps if not s["pass"]]
