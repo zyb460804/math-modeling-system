@@ -2,8 +2,8 @@
 
 > **版本：v4.4 | 更新：2026-07-25**（与 CLAUDE.md 同步）
 > **v4.4 变更摘要：** 系统整理 + 实测验证。math-model-producer 归档(单生产系统成型)、RAG 修复(去重 254→251 / md 尾随空格根因修复 / 索引 rebuild 6863 节点)、路由文档全面更新(20+ 处)、实测验证(预检/状态门/门禁脚本跑通、RAG 召回储能论文、11 个工具链可用)、paper_output 归档分层。详见 CLAUDE.md v4.4 摘要。
-> **系统架构：** 单生产系统——根目录 `outputs/`(知识骨干) + `prompts/`(手动工作流) + `.claude/skills/`(67 个 skill) + `.claude/agents/`(9 个 agent) 统一驱动；`math-model-producer/` 已于 2026-07-25 归档至 `resources/_archive/math-model-producer_old/`，不再有独立子系统。
-> **核心入口：** `.claude/skills/paper-workflow-orchestrator/SKILL.md` 是正式赛题的唯一总入口；`outputs/INDEX.md` 是规则/模板的唯一索引；`prompts/00_route_task.md` 是手动任务分流入口。
+> **系统架构：** 单生产系统——根目录 `outputs/`(知识骨干) + `.claude/skills/`(54 个 skill，v4.8 大扫除后) + `.claude/agents/`(9 个 agent) 统一驱动；`prompts/` 32 个手动工作流已于 v4.8 全部归档至 `prompts/_archive/`（能力由 skill 统一入口覆盖）；`math-model-producer/` 已于 2026-07-25 归档至 `resources/_archive/math-model-producer_old/`，不再有独立子系统。
+> **核心入口：** `.claude/skills/paper-workflow-orchestrator/SKILL.md` 是正式赛题的唯一总入口；`outputs/INDEX.md` 是规则/模板的唯一索引；手动任务分流用 `outputs/task_router.md`（旧 `prompts/_archive/00_route_task.md` 已归档至 `prompts/_archive/`）。
 
 ---
 
@@ -71,7 +71,7 @@
 后续分析、写作、审稿、答辩时，应优先通过 `outputs/INDEX.md` 定位并复用 `outputs/` 中已沉淀的规则与模板，不要每次临时发挥。
 
 ### 原则 5：提示词总母版只负责调度，不替代真实求解
-当用户需要”该怎么问 AI””比赛当天用哪段提示词”时，优先调用 `prompts/25_prompt_master_pack.md` 和 `outputs/prompt_master_pack.md`。提示词总母版只能帮助拆题、选模、生成候选方案、组织表达和自查风险，不能替代人工确认模型、数据、代码运行结果和论文结论。
+当用户需要”该怎么问 AI””比赛当天用哪段提示词”时，优先调用 `outputs/prompt_master_pack.md`（原 `prompts/_archive/25_prompt_master_pack.md`）。提示词总母版只能帮助拆题、选模、生成候选方案、组织表达和自查风险，不能替代人工确认模型、数据、代码运行结果和论文结论。
 
 ### 原则 6：生产优先级
 当同一任务既可以”总结”也可以”产出”时，优先顺序是：
@@ -226,13 +226,13 @@
 **任务路由 → 知识更新/资料入库 → 单题开工 → 数据理解 → 审题选模 → 代码/论文/图表/表格生产 → 动态验收 → 最终质量门 → 提交/答辩 → 经验回灌**
 
 ### 阶段 1：任务路由
-先用 `outputs/INDEX.md` 定位功能域，再用 `outputs/task_router.md` 和 `prompts/00_route_task.md` 判断当前任务属于系统建设、知识更新、单题建模、论文改稿、代码生成、图表表格、答辩准备还是提交冲刺。
+先用 `outputs/INDEX.md` 定位功能域，再用 `outputs/task_router.md` 判断（旧 prompts 分流入口已归档）当前任务属于系统建设、知识更新、单题建模、论文改稿、代码生成、图表表格、答辩准备还是提交冲刺。
 
 ### 阶段 2：知识更新/资料入库
-新增资料先扫描建图；新增知识点、提示词、算法或案例经验时，必须调用 `prompts/29_update_knowledge_assets.md` 与 `outputs/knowledge_update_workflow.md`，判断是否进入母库、deliverables 或子系统。资料归档统一放 `resources/01-09` 对应目录。
+新增资料先扫描建图；新增知识点、提示词、算法或案例经验时，必须按 `outputs/knowledge_update_workflow.md` 执行（旧 prompts/_archive/29 为历史版本），判断是否进入母库、deliverables 或子系统。资料归档统一放 `resources/01-09` 对应目录。
 
 ### 阶段 3：单题开工与数据理解
-新题先用 `prompts/23_start_new_case.md` 建立任务包；只要涉及题面附件、字段、参数或数据文件，就先用 `outputs/data_cleaning_standards.md` 统一字段、单位、指标方向、缺失异常、参数来源和 P0 数据风险。
+新题先用 `paper-workflow-orchestrator` skill 建立任务包；只要涉及题面附件、字段、参数或数据文件，就先用 `outputs/data_cleaning_standards.md` 统一字段、单位、指标方向、缺失异常、参数来源和 P0 数据风险。
 
 ### 阶段 4：审题选模
 明确目标输出、题型、变量、约束、主模型、备选模型、检验方式和图表需求，优先调用 `outputs/method_matching.md` 与 `outputs/algorithm_templates.md`。
@@ -249,7 +249,7 @@
 - **fast**：仅 L1 单次 sanity check，用于选题试跑或时间极紧。
 
 ### 阶段 7：提交/答辩与经验回灌
-完成提交包或答辩材料后，用 `prompts/22_case_feedback_loop.md` 把可复用经验回灌到母库；只服务单题的内容留在案例层。
+完成提交包或答辩材料后，按 `outputs/case_feedback_loop.md` 把可复用经验回灌到母库；只服务单题的内容留在案例层。
 
 ---
 
@@ -524,8 +524,8 @@
 7. 告诉我最值得优先精读的材料
 
 ### 情况 B：我给你一道题
-1. 先用 `prompts/00_route_task.md` 判断任务入口
-2. 如需赛中直接调用 AI 提示词，使用 `prompts/25_prompt_master_pack.md`
+1. 先用 `outputs/task_router.md` 判断任务入口（正式赛题直接走 `paper-workflow-orchestrator`）
+2. 如需赛中直接调用 AI 提示词，使用 `outputs/prompt_master_pack.md`
 3. 先审题
 4. 判断题型
 5. 给出 2~3 条建模路线
@@ -695,14 +695,14 @@
 
 ### B. 统一任务路由
 在任务不明确或系统较复杂时，优先先走：
-- `prompts/00_route_task.md`
+- `prompts/_archive/00_route_task.md`
 - `outputs/task_router.md`
 
 不要直接凭感觉跳进某个 prompt。
 
 ### C. 统一提示词调度
 当任务是“给我一段提示词”“比赛当天该怎么问 AI”“把国赛/美赛/五一赛提示词调出来”时，优先先走：
-- `prompts/25_prompt_master_pack.md`
+- `prompts/_archive/25_prompt_master_pack.md`
 - `outputs/prompt_master_pack.md`
 - `outputs/prompts_outputs_call_map.md`
 
@@ -710,7 +710,7 @@
 
 ### D. 统一数据口径
 当任务涉及题面附件、字段说明、原始数据、参数来源、表格数字或代码输入输出时，优先先走：
-- `prompts/30_data_understanding.md`
+- `prompts/_archive/30_data_understanding.md`
 - `outputs/data_understanding_workflow.md`
 - `outputs/data_cleaning_standards.md`
 
@@ -718,8 +718,8 @@
 
 ### E. 统一最终质量门
 当任务接近提交、答辩、分享或交付时，必须区分 `demo` 与 `real_case`，并优先调用：
-- `prompts/24_dynamic_acceptance.md`
-- `prompts/28_final_quality_gate.md`
+- `prompts/_archive/24_dynamic_acceptance.md`
+- `prompts/_archive/28_final_quality_gate.md`
 - `outputs/final_quality_gate_workflow.md`
 - `outputs/final_quality_gate.md`
 
@@ -757,14 +757,14 @@ python tools/quality_gate/final_gate_runner.py --paper-dir <作品目录> --work
 
 ### G. 统一知识更新
 用户新增知识点、资料、提示词、算法、案例经验或高分表达后，优先调用：
-- `prompts/29_update_knowledge_assets.md`
+- `prompts/_archive/29_update_knowledge_assets.md`
 - `outputs/knowledge_update_workflow.md`
 
 知识更新必须完成“分类 → 抽取 → 回灌母库 → 同步路由 → 登记资产 → 更新成品模板 → 子系统同步 → 留下待确认项”。不要只把新增知识写进 README，也不要只更新 prompt 而不更新对应 output。
 
 ### H. 统一案例回灌
 只要一个个案基本完成，就应考虑是否执行：
-- `prompts/22_case_feedback_loop.md`
+- `prompts/_archive/22_case_feedback_loop.md`
 - `outputs/case_feedback_loop.md`
 
 回灌至少要回答：
@@ -782,11 +782,11 @@ python tools/quality_gate/final_gate_runner.py --paper-dir <作品目录> --work
 ### J. 子系统定位（已归档）
 `math-model-producer/` 原为通用数学建模子生产系统，后降级为专用分类资料库，已于 2026-07-25 整体归档至 `resources/_archive/math-model-producer_old/`。其 prompts/ 和 outputs/ 早已合并到根目录统一体系。
 
-当前所有能力统一由根目录 `outputs/`、`prompts/`、`.claude/skills/` 维护，不再有独立子系统。历史资料如需查阅，前往 `resources/_archive/math-model-producer_old/`。
+当前所有能力统一由根目录 `outputs/`、`.claude/skills/`、`tools/quality_gate/` 维护，不再有独立子系统。历史资料如需查阅，前往 `resources/_archive/math-model-producer_old/`。
 
 新增资料时，统一按根目录体系处理：
-1. 先用 `prompts/01_full_scan.md` 扫描。
-2. 用 `prompts/29_update_knowledge_assets.md` 判断回灌落点。
-3. 所有规则、模板、路由和质量门统一由根目录 `outputs/` 和 `prompts/` 维护。
+1. 先用 `prompts/_archive/01_full_scan.md` 扫描。
+2. 用 `prompts/_archive/29_update_knowledge_assets.md` 判断回灌落点。
+3. 所有规则、模板、路由和质量门统一由根目录 `outputs/`、`.claude/skills/` 和 `tools/quality_gate/` 维护（`prompts/` 已归档）。
 
 以后如果任务目标和资料条件允许，应尽量让每一轮工作都落进这个闭环。
