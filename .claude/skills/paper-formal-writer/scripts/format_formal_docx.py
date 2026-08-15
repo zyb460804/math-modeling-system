@@ -247,7 +247,10 @@ def configure_document(document: Document) -> None:
     normal = styles["Normal"]
     normal.font.name = "宋体"
     normal._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
-    normal.font.size = Pt(10.5)
+    # G4.7 盲评 P1-3（2026-08-15）：正文 Normal 样式 10.5pt（五号）→ 12pt（小四，国赛规范）。
+    # 仅动字号；首行缩进/行距/段后等其余格式不碰（缩进 0.74cm 对应旧 10.5pt 两字符，
+    # 12pt 下严格两字符应约 0.85cm，属格式策略调整，不在本次授权范围，列为搁置项）。
+    normal.font.size = Pt(12)
     normal.paragraph_format.first_line_indent = Cm(0.74)
     normal.paragraph_format.line_spacing = 1.35
     normal.paragraph_format.space_after = Pt(4)
@@ -328,7 +331,7 @@ def _is_inline_formula_candidate(content: str, full_text: str, start: int, end: 
     return True
 
 
-def _add_runs_with_inline_formula(paragraph, text: str, font: str = "宋体", size: float = 10.5, bold: bool = False) -> None:
+def _add_runs_with_inline_formula(paragraph, text: str, font: str = "宋体", size: float = 12.0, bold: bool = False) -> None:
     """把含 $...$ 行内公式的文本拆分注入段落：公式走 OMML，其余走普通 run。
 
     所有需要渲染含公式文本的段落（body/center/heading/list/table cell）都应调用此函数，
@@ -365,7 +368,8 @@ def add_body_paragraph(document: Document, text: str) -> None:
     paragraph.paragraph_format.first_line_indent = Cm(0.74)
     paragraph.paragraph_format.line_spacing = 1.35
     paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    _add_runs_with_inline_formula(paragraph, text, "宋体", 10.5, False)
+    # 正文段字号 12pt 小四（G4.7 盲评 P1-3）；题注走 add_center_paragraph 维持 10.5pt 五号
+    _add_runs_with_inline_formula(paragraph, text, "宋体", 12, False)
 
 
 def add_center_paragraph(document: Document, text: str, font_name: str = "宋体", size: float = 10.5, bold: bool = False) -> None:
@@ -388,7 +392,8 @@ def add_block_formula(document: Document, latex: str) -> None:
     if not _append_omml(paragraph, latex):
         # 兜底：纯文本（非 OMML），至少不丢内容
         run = paragraph.add_run(latex)
-        apply_run_font(run, "Cambria Math", 10.5)
+        # 公式与正文同号 12pt（G4.7）：OMML 路径继承 Normal=12pt，纯文本兜底保持一致
+        apply_run_font(run, "Cambria Math", 12)
 
 
 def add_heading(document: Document, text: str, level: int) -> None:
@@ -658,8 +663,8 @@ def render_markdown(document: Document, text: str, table_lookup: dict[str, dict[
             paragraph.paragraph_format.left_indent = Cm(0.74)
             paragraph.paragraph_format.first_line_indent = Cm(-0.25)
             bullet_run = paragraph.add_run("• ")
-            apply_run_font(bullet_run, "宋体", 10.5)
-            _add_runs_with_inline_formula(paragraph, list_item.group(1), "宋体", 10.5, False)
+            apply_run_font(bullet_run, "宋体", 12)
+            _add_runs_with_inline_formula(paragraph, list_item.group(1), "宋体", 12, False)
             idx += 1
             continue
 
