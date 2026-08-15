@@ -28,6 +28,19 @@
 fail-closed 原则（CR-2）：任何被依赖的检查器脚本缺失 → 对应门记 pass=False 并使整体 FAIL，
 不做"未找到，跳过"的无痕放行；显式 --skip-* 旗标是唯一合法跳过途径。
 
+v4.10.3（第五轮复审+实弹修复，2026-08-15）：
+  - N1 收集范围：G4.8 docx/results 与 G4.6 代码/verify 的 rglob 统一排除临时/归档目录段
+    （_archive*/_fixtest*/_advtest*/_rejected*/_retired*/__pycache__/.git，与 paper_artifact_check
+    同口径并扩全前缀）——攻击者向 qa/_advtest_x/results/ 塞数字字典可把无来源比例稀释到
+    0%（实测 51.0%→0.0%），归档旧数字也会给正文"假来源"；qa/ 本身含合法报告不整体排除
+  - 阈值 1.0 拒绝 + 降阈留痕：--missing-ratio-threshold 区间 (0,1] → (0,1)（1.0 等于
+    整体关掉 G4.8，属无痕自禁用）；传非默认值（≠0.30）时整体 status 记 PASS_WITH_SKIP，
+    skipped_gates 追加 {"gate":"G4.8","threshold_override":值} 审计条目（合法降阈从此有痕）
+  - schema 模块 import 失败不再裸 ImportError 崩溃：盲评门记结构化 FAIL step
+    （pass=False + "schema 模块不可用"，fail-closed）
+  - G4.8 has_source 性能：set 线性扫 O(N×R)（万×万最坏 ~20s）→ 排序 + bisect 邻域
+    比较（容差语义不变：|v-r| <= tol*|r|+0.5，cutoff 上界 (tol*|v|+0.5)/(1-tol) 封闭双侧）
+
 v4.10.2（第四轮对抗性审查修复，2026-08-15）：
   - G4.8 扫描范围排除 _archive* 目录段（docx 与 results 同口径，对齐 G4.7）——
     归档数字不再稀释无来源比例、归档旧 results 不再给正文数字"假来源"
@@ -48,6 +61,7 @@ v4.10.1（第三轮审查修复，2026-08-15）：
 from __future__ import annotations
 
 import argparse
+import bisect
 import json
 import re
 import subprocess
@@ -66,12 +80,33 @@ for stream in (sys.stdout, sys.stderr):
 # pipeline_runner.championship_missing_evidence 消费同一实现，两链口径永不分裂。
 # 互指：tools/quality_gate/pipeline_runner.py（同 verify_gate.missing_verify_for_models
 # 被 final_gate_runner 复用的共用模式）。脚本方式运行时 sys.path[0] 即本目录；
-# 被当作模块 import 时补目录重试。
+# 被当作模块 import 时补目录重试。第五轮复审（MEDIUM）：两段 import 都失败
+# （模块被删/损坏/语法错）不再裸 ImportError 崩穿整脚本——置 None 留错误串，
+# 消费方（check_blind_panel_championship）落结构化 FAIL step（fail-closed）。
+_BLIND_PANEL_SCHEMA_ERR = ""
 try:
     from blind_panel_schema import blind_panel_report_problems
-except ImportError:  # pragma: no cover - 仅在被作为模块导入且 sys.path 无本目录时触发
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from blind_panel_schema import blind_panel_report_problems
+except Exception:
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from blind_panel_schema import blind_panel_report_problems
+    except Exception as _exc:  # pragma: no cover - 模块缺失/损坏场景
+        blind_panel_report_problems = None
+        _BLIND_PANEL_SCHEMA_ERR = f"{type(_exc).__name__}: {_exc}"
+
+# 临时/归档目录段排除规则（第五轮复审 N1）：G4.8 的 docx/results 收集与 G4.6 的
+# 代码/verify 收集统一使用——与 paper_artifact_check.check_artifacts 同口径（按
+# paper_dir 相对路径的"目录段"匹配，不影响同名文件），并把前缀扩到全部已知
+# 临时/归档命名。攻击面：qa/_advtest_x/results/dict.json 之类对抗性数字字典可把
+# G4.8 无来源比例稀释到 0%（实测 51.0%→0.0%），归档旧数字也会给正文"假来源"。
+# 注意：qa/ 本身含合法终检报告（final_gate_report.json 等）不能整体排除，
+# 只排以下述前缀命名的子目录（无论其挂在哪一层）。
+EXCLUDED_DIR_EXACT = frozenset({"__pycache__", ".git"})
+EXCLUDED_DIR_PREFIXES = ("_archive", "_fixtest", "_advtest", "_rejected", "_retired")
+
+
+def _is_excluded_dir_segment(seg: str) -> bool:
+    return seg in EXCLUDED_DIR_EXACT or seg.startswith(EXCLUDED_DIR_PREFIXES)
 
 NUM_RE = re.compile(r"\d+(?:\.\d+)?")
 # G4.8 无来源数字比例阈值（去重口径，FAIL 判定口径）：超过即从"人工复核 warning"升级为 FAIL。
@@ -130,11 +165,11 @@ def generic_number_check(paper_dir: Path, missing_ratio_fail: float = MISSING_RA
     info: list[str] = []
 
     def _is_active(f: Path) -> bool:
-        # 第四轮审查：归档目录段（_archive* 前缀）不参与数字核对——与
-        # paper_artifact_check.check_artifacts 同一口径。旧版把归档 docx/results
-        # 一并扫入有两重污染：归档数字匹配 results 会稀释无来源比例（去重分母
-        # 变大，真 FAIL 被冲淡成 PASS）；归档 results 的旧数字会给正文"假来源"
-        return not any(p.startswith("_archive") for p in f.relative_to(paper_dir).parts[:-1])
+        # 第四轮审查：归档目录段不参与数字核对（两重污染：稀释无来源比例 / 假来源）。
+        # 第五轮复审 N1：前缀从 _archive* 扩到全部临时/归档命名（见模块级
+        # EXCLUDED_DIR_PREFIXES）——qa/_advtest_x/results/dict.json 的对抗性数字
+        # 字典实测把 51.0% 稀释成 0.0%，此口径与 G4.7 paper_artifact_check 对齐并扩全
+        return not any(_is_excluded_dir_segment(p) for p in f.relative_to(paper_dir).parts[:-1])
 
     docx_files = [f for f in paper_dir.rglob("*.docx") if _is_active(f)]
     if not docx_files:
@@ -166,9 +201,26 @@ def generic_number_check(paper_dir: Path, missing_ratio_fail: float = MISSING_RA
     if not result_nums:
         return info, ["FAIL_P0: 未找到结果数字文件（results/*.json|*.csv），论文数字无法客观核对来源"]
     tol = 0.05
+    # 第五轮复审（LOW，性能）：set 线性扫 O(N×R)（万×万最坏情况 ~20s）。排序 + bisect
+    # 邻域比较，容差语义保持不变（命中条件 |v-r| <= max(tol*|r|, 0.5)）：
+    # 由 |r| <= |v| + |v-r| 可推出 |v-r| <= (tol*|v| + 0.5)/(1-tol)（cutoff 上界），
+    # 窗口外的 r 必不命中——双侧各扫到差值越过 cutoff 即停，候选集封闭、结论与旧版一致
+    sorted_nums = sorted(result_nums)
 
     def has_source(v: float) -> bool:
-        return any(abs(v - r) <= max(tol * abs(r), 0.5) for r in result_nums)
+        cutoff = (tol * abs(v) + 0.5) / (1.0 - tol)
+        i = bisect.bisect_left(sorted_nums, v)
+        j = i - 1
+        while j >= 0 and v - sorted_nums[j] <= cutoff:
+            if abs(v - sorted_nums[j]) <= max(tol * abs(sorted_nums[j]), 0.5):
+                return True
+            j -= 1
+        k = i
+        while k < len(sorted_nums) and sorted_nums[k] - v <= cutoff:
+            if abs(v - sorted_nums[k]) <= max(tol * abs(sorted_nums[k]), 0.5):
+                return True
+            k += 1
+        return False
 
     missing = [v for v in paper_nums if not has_source(v)]
     uniq_missing = sorted(set(missing))
@@ -236,6 +288,11 @@ def check_blind_panel_championship(paper_dir: Path) -> tuple[list[str], list[str
     how = ("调 blind-panel skill：3 座并行盲评 → Lead 聚合写 paper_output/qa/blind_panel_report.json"
            "（schema: seats A/B/C 各含数值 weighted_total + verdict ∈ pass|refine|block，"
            "见 .claude/skills/blind-panel/SKILL.md）")
+    if blind_panel_report_problems is None:
+        # 第五轮复审（MEDIUM）：schema 模块不可用 = 结构化 FAIL（fail-closed，同 CR-2），
+        # 不再裸 ImportError 崩穿整脚本（final_gate_report.json 都写不出来）
+        return [f"盲评校验 schema 模块不可用（blind_panel_schema，fail-closed）——无法校验 {report}："
+                f"{_BLIND_PANEL_SCHEMA_ERR}；修复 tools/quality_gate/blind_panel_schema.py 后重跑"], info
     problems, data = blind_panel_report_problems(report)
     if problems:
         failures.extend(f"championship（v4.9 默认模式）盲评证据不达标：{p} —— {how}" for p in problems)
@@ -254,10 +311,13 @@ def main() -> int:
                     help="跳过 championship 盲评证据门（仅对应 orchestrator escape hatch 显式降级 standard/fast 时合法；"
                          "跳过会在报告追加 skipped_by_flag step 留痕，status=PASS_WITH_SKIP，SKIP≠PASS）")
     ap.add_argument("--missing-ratio-threshold", type=float, default=MISSING_RATIO_FAIL,
-                    help="G4.8 无来源数字去重比例 FAIL 阈值（默认 0.30；须在 (0,1] 区间）")
+                    help="G4.8 无来源数字去重比例 FAIL 阈值（默认 0.30；须在 (0,1) 开区间——"
+                         "1.0 等于把 G4.8 整体关掉，属无痕自禁用，拒绝；非默认值会以 "
+                         "PASS_WITH_SKIP + skipped_gates 审计条目留痕）")
     args = ap.parse_args()
-    if not (0 < args.missing_ratio_threshold <= 1):
-        ap.error(f"--missing-ratio-threshold 须在 (0,1] 区间，收到 {args.missing_ratio_threshold}")
+    if not (0 < args.missing_ratio_threshold < 1):
+        ap.error(f"--missing-ratio-threshold 须在 (0,1) 开区间（1.0 等于整体关掉 G4.8，拒绝），"
+                 f"收到 {args.missing_ratio_threshold}")
 
     paper_dir = Path(args.paper_dir).resolve()  # H-11：先 resolve，rglob/子进程全部走绝对路径
     workdir = Path(args.workdir).resolve()
@@ -284,14 +344,20 @@ def main() -> int:
         if not f.is_file():
             continue
         rel_parts = f.relative_to(paper_dir).parts
-        if "qa" in rel_parts or "quality_gate" in rel_parts or "__pycache__" in rel_parts:
+        if ("qa" in rel_parts or "quality_gate" in rel_parts or "__pycache__" in rel_parts
+                or any(_is_excluded_dir_segment(p) for p in rel_parts)):
             continue
         code_files.append(f)
     # 与 code_files 同一排除规则：qa/quality_gate/__pycache__ 下的 verify_*.py 是工具或
-    # 测试残留（如对抗性测试临时目录），不得被当作作品自证脚本执行或参与对应关系校验
+    # 测试残留（如对抗性测试临时目录），不得被当作作品自证脚本执行或参与对应关系校验。
+    # 第五轮复审 N1：临时/归档目录段（_archive*/_fixtest*/_advtest*/_rejected*/_retired*）
+    # 一并排除——旧版会把归档/沙箱里的 verify_*.py 捡出来当作品自证脚本执行（rglob 吸收
+    # 同一攻击面，G4.8 收集口径已同步收紧）
     verify_files = [
         f for f in paper_dir.rglob("verify_*.py")
-        if f.is_file() and not ({"qa", "quality_gate", "__pycache__"} & set(f.relative_to(paper_dir).parts))
+        if f.is_file()
+        and not ({"qa", "quality_gate", "__pycache__"} & set(f.relative_to(paper_dir).parts))
+        and not any(_is_excluded_dir_segment(p) for p in f.relative_to(paper_dir).parts)
     ]
     modeling_dir = paper_dir / "code" / "modeling"
     models = (sorted(m for m in modeling_dir.glob("*.py") if not m.name.startswith("_"))
@@ -351,6 +417,11 @@ def main() -> int:
                           "out_tail": "evidence_gate.py 未找到（fail-closed）——检查器缺失=FAIL，唯一合法跳过途径是显式 --skip-evidence", "err_tail": ""})
     # 4) 数字一致性（通用提取；P0-5：双口径展示 + 阈值可 CLI 配置）
     info, warns = generic_number_check(paper_dir, args.missing_ratio_threshold)
+    if args.missing_ratio_threshold != MISSING_RATIO_FAIL:
+        # 第五轮复审（MEDIUM+B6）：非默认阈值 = 有痕降阈——不改变本步判定，但
+        # G4.8 step 输出显式声明，且整体 status/skipped_gates 留痕（见汇总段）
+        info.append(f"⚠ 本次使用非默认阈值 {args.missing_ratio_threshold}（默认 {MISSING_RATIO_FAIL}）——"
+                    "合法降阈已留痕：整体 status 记 PASS_WITH_SKIP，skipped_gates 追加 G4.8 审计条目")
     num_fail = any(w.startswith("FAIL_P0") for w in warns)
     steps.append({"gate": "G4.8_NUMBER_CONSISTENCY", "cmd": "generic", "rc": 1 if num_fail else 0,
                   "pass": not num_fail, "out_tail": "\n".join(info + [w for w in warns if not w.startswith("FAIL_P0")]),
@@ -401,9 +472,20 @@ def main() -> int:
                                   "standard/fast；SKIP≠PASS，本结论不含盲评证据，不得按 championship 全绿口径宣称）",
                       "err_tail": ""})
 
-    # 汇总（P0-4：skipped_by_flag 的 step 不算 failed，但单独成清单供审计）
+    # 汇总（P0-4：skipped_by_flag 的 step 不算 failed，但单独成清单供审计；
+    # 第五轮复审：skipped_gates 同时承载"显式跳过"（str）与"有痕降阈"（dict）两类条目）
     failed = [s for s in steps if not s["pass"] and not s.get("skipped_by_flag")]
-    skipped_gates = [s["gate"] for s in steps if s.get("skipped_by_flag")]
+    skipped_gates: list[object] = [s["gate"] for s in steps if s.get("skipped_by_flag")]
+    if args.missing_ratio_threshold != MISSING_RATIO_FAIL:
+        # 第五轮复审（MEDIUM+B6）：传非默认阈值（≠0.30）= 合法降阈，从此有痕——
+        # 整体 status 记 PASS_WITH_SKIP，skipped_gates 追加审计条目（沿用 skip 留痕形态），
+        # 不再出现"阈值调宽后照样打纯 PASS"的无痕自禁用
+        skipped_gates.append({"gate": "G4.8", "threshold_override": args.missing_ratio_threshold})
+
+    def _fmt_skip(e) -> str:
+        return e if isinstance(e, str) else \
+            f"{e['gate']}(threshold_override={e['threshold_override']}≠默认{MISSING_RATIO_FAIL})"
+
     report = {
         "gate": "FINAL_GATE_RUNNER",
         "status": "FAIL" if failed else ("PASS_WITH_SKIP" if skipped_gates else "PASS"),
@@ -439,11 +521,14 @@ def main() -> int:
     if failed:
         print(f"  ❌ 终检未通过（{len(failed)} 道门 FAIL）——不得宣称可提交/可答辩/可复现")
         if skipped_gates:
-            print(f"  ⏭️ 另有 {len(skipped_gates)} 道门被显式跳过（SKIP≠PASS）: {', '.join(skipped_gates)}")
+            print(f"  ⏭️ 另有 {len(skipped_gates)} 项留痕跳过/降阈（SKIP≠PASS）: "
+                  f"{', '.join(_fmt_skip(e) for e in skipped_gates)}")
         return 1
     if skipped_gates:
-        print(f"  ⏭️ 终检通过（status=PASS_WITH_SKIP），但 {len(skipped_gates)} 道门被显式跳过"
-              f"（SKIP≠PASS）: {', '.join(skipped_gates)} —— 结论不含盲评证据")
+        flag_skips = [e for e in skipped_gates if isinstance(e, str)]
+        suffix = "——结论不含盲评证据" if flag_skips else "——G4.8 以非默认阈值放行（有痕降阈）"
+        print(f"  ⏭️ 终检通过（status=PASS_WITH_SKIP），但 {len(skipped_gates)} 项留痕（SKIP≠PASS）: "
+              f"{', '.join(_fmt_skip(e) for e in skipped_gates)} {suffix}")
         return 0
     print("  ✅ 终检全部通过，可进入提交包生成")
     return 0

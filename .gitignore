@@ -34,6 +34,7 @@ paper_output/table_index.json
 paper_output/tasks.json
 paper_output/format_check_report.json
 paper_output/format_check_report.md
+paper_output/format_check_gate_report.md
 paper_output/_pdf_text.txt
 
 # ---------- 本机配置（含绝对路径）----------

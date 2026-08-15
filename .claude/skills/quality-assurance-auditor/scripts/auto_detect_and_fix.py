@@ -16,12 +16,14 @@
     python auto_detect_and_fix.py --stage s7            # S7阶段全部
     python auto_detect_and_fix.py --stage code_style    # 仅显式可用（不在 all 展开内）
 
-三态（第三轮审查 MEDIUM-C 修复）：
+四态（第三轮审查 MEDIUM-C + 第四轮 WARN 语义修复）：
     每项检测 = pass（真通过）/ skip（未实际检查：缺 qa_config、缺产物等，
-    rc=0 但 stdout 行首 SKIP——绝不冒充"检测通过"）/ fail（失败）。
+    rc=0 但 stdout 行首 SKIP——绝不冒充"检测通过"）/ warn（advisory 告警：
+    rc=2，如 render_check 的白区>80%/<1KB/边缘内容——"留白偏大"≠"不可交付"，
+    不进修复轮、不计失败，但 stdout 明示 [!] WARN）/ fail（失败）。
 
 返回码:
-    0 = 无失败项（含 SKIP 项时 stdout 会明示 [--] SKIP，未实际检查 ≠ 通过）
+    0 = 无失败项（含 SKIP/WARN 项时 stdout 会明示 [--] SKIP / [!] WARN，未实际检查 ≠ 通过）
     1 = 检测失败（需人工介入）
 """
 
@@ -156,14 +158,21 @@ DETECTORS = {
 
 
 def run_script(script_path: Path, extra_args: list = None) -> tuple:
-    """运行脚本，返回 (passed, output)
+    """运行脚本，返回 (status, output)；status ∈ {"pass", "warn", "fail"}（第四轮四态化）。
 
     CR-4 修复：
-    - 检测脚本不存在 = FAIL（原 return True 使任一检测器路径失效都显示"检测通过"）
+    - 检测脚本不存在 = fail（原 return True 使任一检测器路径失效都显示"检测通过"）
     - 子进程解释器用 sys.executable（本机全局 python 是坏 venv，PATH 上的 "python" 不可用）
+
+    rc 语义（第四轮修复 WARN 语义坍缩）：
+    - rc=0 → "pass"（调用方再按 stdout SKIP 行降级为 skip 态）
+    - rc=2 → "warn"（advisory 告警，不阻断：目前 render_check 用它表达白区>80%/
+      <1KB/边缘内容等"建议改进"级问题——"留白偏大"≠"不可交付"，不进修复轮、
+      不计失败；与 final_gate_runner 的 rc=2=advisory 约定一致）
+    - 其它 rc（含超时/异常）→ "fail"
     """
     if not script_path.exists():
-        return False, f"检测脚本不存在: {script_path}"
+        return "fail", f"检测脚本不存在: {script_path}"
 
     cmd = [sys.executable, str(script_path)]
     if extra_args:
@@ -183,11 +192,15 @@ def run_script(script_path: Path, extra_args: list = None) -> tuple:
             errors="replace",
         )
         output = (result.stdout or "") + (result.stderr or "")
-        return result.returncode == 0, output
+        if result.returncode == 0:
+            return "pass", output
+        if result.returncode == 2:
+            return "warn", output
+        return "fail", output
     except subprocess.TimeoutExpired:
-        return False, "脚本执行超时"
+        return "fail", "脚本执行超时"
     except Exception as e:
-        return False, f"脚本执行异常: {e}"
+        return "fail", f"脚本执行异常: {e}"
 
 
 def _skip_reason(output: str) -> str | None:
@@ -209,11 +222,13 @@ def _skip_reason(output: str) -> str | None:
 
 
 def detect_and_fix(stage: str, config: dict) -> str:
-    """检测+修复单个阶段。返回三态："pass" | "skip" | "fail"。
+    """检测+修复单个阶段。返回四态："pass" | "skip" | "warn" | "fail"。
 
     - "pass"：rc=0 且输出无 SKIP 行（真通过）
     - "skip"：rc=0 但输出行首 SKIP（未实际检查 ≠ 通过，不再冒充 [OK]）
-    - "fail"：rc≠0（含检测脚本不存在/超时/异常），走修复轮
+    - "warn"：rc=2（advisory 告警，不阻断——如 render_check 的白区>80%/<1KB/
+      边缘内容；不进修复轮、不计失败，但 [!] WARN 明示，绝不冒充"检测通过"）
+    - "fail"：rc=1 等其它非零（含检测脚本不存在/超时/异常），走修复轮
     """
     max_rounds = config.get("max_rounds", 2)
     is_combined = config.get("combined", False)
@@ -227,15 +242,23 @@ def detect_and_fix(stage: str, config: dict) -> str:
 
         # 检测（combined 与普通模式在检测阶段行为一致，差异只在下方修复器参数——原 if/else 两分支相同，已合并）
         # 检测器自定义参数（如 figure 的 check-all 子命令）经 config["args"] 透传，缺省无参
-        passed, output = run_script(config["script"], config.get("args"))
+        status, output = run_script(config["script"], config.get("args"))
 
-        if passed:
+        if status == "pass":
             skip_line = _skip_reason(output)
             if skip_line:
                 print(f"  [--] SKIP（未实际检查 ≠ 通过）：{skip_line}")
                 return "skip"
             print(f"  [OK] 检测通过")
             return "pass"
+
+        if status == "warn":
+            # rc=2 advisory：不进修复轮、不计失败——但绝不冒充"检测通过"，
+            # 取输出末行（通常是子脚本的 rc 语义说明行）作 WARN 摘要
+            warn_lines = [ln.strip() for ln in output.splitlines() if ln.strip()]
+            reason = warn_lines[-1] if warn_lines else "rc=2（advisory）"
+            print(f"  [!] WARN（advisory，不阻断）：{reason[:200]}")
+            return "warn"
 
         # 检测失败，提取错误信息
         errors = []
@@ -275,13 +298,13 @@ def detect_and_fix(stage: str, config: dict) -> str:
             encoding="utf-8",
         )
 
-        # 运行修复器
+        # 运行修复器（修复器 rc=2 不应出现；若出现按"未完全成功"处理，fail-closed）
         if is_combined:
-            fix_passed, fix_output = run_script(fixer, ["--fix-all"])
+            fix_status, fix_output = run_script(fixer, ["--fix-all"])
         else:
-            fix_passed, fix_output = run_script(fixer, ["--errors", str(error_file)])
+            fix_status, fix_output = run_script(fixer, ["--errors", str(error_file)])
 
-        if fix_passed:
+        if fix_status == "pass":
             print(f"  [OK] 修复完成")
         else:
             print(f"  [!] 修复未完全成功，进入下一轮")
@@ -316,7 +339,7 @@ def main():
     print(f">>> 自动检测+修复")
     print(f"    阶段: {', '.join(stages)}")
 
-    # 运行（results 值为三态 "pass" | "skip" | "fail"）
+    # 运行（results 值为四态 "pass" | "skip" | "warn" | "fail"）
     results = {}
     for s in stages:
         config = DETECTORS[s].copy()
@@ -324,19 +347,26 @@ def main():
             config["max_rounds"] = args.max_rounds
         results[s] = detect_and_fix(s, config)
 
-    # 汇总（三态：通过 / SKIP / 失败）
+    # 汇总（四态：通过 / SKIP / WARN / 失败）
     print(f"\n{'='*50}")
     print(f"[=] 汇总")
     print(f"{'='*50}")
 
-    status_marks = {"pass": "[OK]", "skip": "[--]", "fail": "[!!]"}
+    status_marks = {"pass": "[OK]", "skip": "[--]", "warn": "[!]", "fail": "[!!]"}
     for s, r in results.items():
-        note = "（SKIP，未实际检查 ≠ 通过）" if r == "skip" else ""
+        if r == "skip":
+            note = "（SKIP，未实际检查 ≠ 通过）"
+        elif r == "warn":
+            note = "（WARN，advisory 告警，不阻断）"
+        else:
+            note = ""
         print(f"  {status_marks[r]} {DETECTORS[s]['description']}{note}")
 
     failed_stages = [s for s, r in results.items() if r == "fail"]
     skipped_stages = [s for s, r in results.items() if r == "skip"]
-    all_passed = not failed_stages  # SKIP 不算失败，但也绝不冒充通过（上方 [--] 明示）
+    warn_stages = [s for s, r in results.items() if r == "warn"]
+    # SKIP/WARN 不算失败，但也绝不冒充通过（上方 [--]/[!] 明示）
+    all_passed = not failed_stages
 
     # 保存日志
     log_file = QA_DIR / "auto_detect_fix_log.json"
@@ -349,6 +379,7 @@ def main():
             "counts": {
                 "pass": sum(1 for r in results.values() if r == "pass"),
                 "skip": len(skipped_stages),
+                "warn": len(warn_stages),
                 "fail": len(failed_stages),
             },
             "all_passed": all_passed,
@@ -357,10 +388,21 @@ def main():
     )
 
     if all_passed:
+        tail_notes = []
         if skipped_stages:
-            # 全 SKIP（或 SKIP+PASS）时返回 0，但 stdout 必须明示：未实际检查 ≠ 通过
-            print(f"\n[--] 无失败项，但 {len(skipped_stages)} 项检测为 SKIP"
-                  f"（未实际检查 ≠ 通过）：{', '.join(skipped_stages)}")
+            # 含 SKIP 项时返回 0，但 stdout 必须明示：未实际检查 ≠ 通过
+            tail_notes.append(
+                f"[--] 无失败项，但 {len(skipped_stages)} 项检测为 SKIP"
+                f"（未实际检查 ≠ 通过）：{', '.join(skipped_stages)}"
+            )
+        if warn_stages:
+            # 含 WARN 项（advisory）时不影响 pass/fail 判定，但计数披露可见
+            tail_notes.append(
+                f"[!]  无失败项，{len(warn_stages)} 项检测为 WARN"
+                f"（advisory 告警，不阻断）：{', '.join(warn_stages)}"
+            )
+        if tail_notes:
+            print("\n" + "\n".join(tail_notes))
         else:
             print(f"\n[***] 全部通过！")
         sys.exit(0)

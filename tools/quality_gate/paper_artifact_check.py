@@ -119,11 +119,13 @@ def check_artifacts(paper_dir: Path, require_table: bool = True, require_figures
         return [f"作品目录不存在: {paper_dir}"], [], []
 
     files = [f for f in paper_dir.rglob("*") if f.is_file()]
-    # 归档/沙箱/缓存目录不参与终检（防占位 docx 触发假 FAIL；仅匹配目录段，不影响同名文件）
+    # 归档/沙箱/缓存/对抗测试目录不参与终检（防占位 docx/xlsx 触发假 FAIL；仅匹配目录段，
+    # 不影响同名文件）。前缀口径与 final_gate_runner.EXCLUDED_DIR_PREFIXES 对齐：
+    # _archive*/_fixtest*/_advtest*/_rejected*/_retired*（β1 同款，2026-08 G4.7 对齐）
     files = [
         f for f in files
         if not any(
-            p == "__pycache__" or p == ".git" or p.startswith(("_archive", "_fixtest"))
+            p == "__pycache__" or p == ".git" or p.startswith(("_archive", "_fixtest", "_advtest", "_rejected", "_retired"))
             for p in f.relative_to(paper_dir).parts[:-1]
         )
     ]

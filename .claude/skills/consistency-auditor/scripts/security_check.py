@@ -213,13 +213,24 @@ _MAX_SCAN_BYTES = 2 * 1024 * 1024
 _BINARY_SNIFF_BYTES = 8 * 1024
 
 
+def _fmt_unscanned(nbytes: int) -> str:
+    """未扫余量人性化（第四轮修复 LOW）：<0.1MB 时以字节显示。
+
+    旧版恒用 MB 一位小数——35B/542B 级余量被格式化成"余 0.0MB"，掩盖
+    "其实只差几百字节就全覆盖"的事实；<0.1MB 改显字节，≥0.1MB 仍显 MB。
+    """
+    if nbytes < 0.1 * 1048576:
+        return f"{nbytes}B"
+    return f"{nbytes / 1048576:.1f}MB"
+
+
 def scan_files_for_secrets(
     files: list[str], notes: list[str] | None = None
 ) -> tuple[bool, list[str]]:
     """扫描硬编码密钥。
 
     大文件（>2MB）截断扫描：只读前 _MAX_SCAN_BYTES，notes 注明 scanned_truncated
-    （前 2MB 已扫，余 N MB 未扫）；二进制（前 8KB 含 NUL）跳过并注明 skipped_binary。
+    （前 2MB 已扫，余量按字节/MB 显示）；二进制（前 8KB 含 NUL）跳过并注明 skipped_binary。
     """
     issues: list[str] = []
     seen: set[tuple[str, int, str]] = set()
@@ -249,9 +260,13 @@ def scan_files_for_secrets(
         text = body.decode("utf-8", errors="ignore")
         if truncated and notes is not None:
             unscanned = max(0, size - len(body))
+            # 第四轮修复 LOW：①补"窗口末端约 1KB 属模式匹配盲区"——截断边界处被
+            # 切开的密钥两头都不完整，任何单侧模式都匹配不上（跨界漏报）；
+            # ②余量 <0.1MB 时按字节显示（"余 0.0MB"会掩盖 35B/542B 级余量）
             notes.append(
                 f"scanned_truncated: {fpath}（前 {len(body) / 1048576:.1f}MB 已扫，"
-                f"余 {unscanned / 1048576:.1f}MB 未扫——密钥若藏尾部仍可能逃过，需人工复核）"
+                f"余 {_fmt_unscanned(unscanned)} 未扫——窗口末端约 1KB 属模式匹配盲区"
+                f"（跨界密钥可能漏报），藏尾部的密钥仍可能逃过，需人工复核）"
             )
         for pat, desc in _SECRET_PATTERNS:
             for m in pat.finditer(text):

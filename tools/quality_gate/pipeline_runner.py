@@ -34,6 +34,13 @@ v4.9.1（CR-5 / G-05 / G-07 修复）：
         无离线批量模式，不硬接脚本，在 S4/S6 handoff 与 S8 输出中显式列出
   - 状态文件向后兼容：stage id 只增不改；新增字段（skip_count/skipped_steps）只增
 
+v4.9.5（第五轮复审+实弹修复，2026-08-15）：
+  - MD_STATUS_RE 词元 [A-Za-z]+ → [A-Za-z_]+：md 报告状态行 PASS_WITH_SKIP 旧正则
+    截成 PASS 被归纯 PASS 侧（SKIP≠PASS 三态口径被打穿），现全词接住归 SKIP 侧
+  - blind_panel_schema import 两段重试都失败不再裸 ImportError 崩穿：置 None 留错误串，
+    championship_missing_evidence 落结构化缺失条目（S8 不得 approved，fail-closed，
+    与 final_gate_runner 结构化 FAIL step 同口径）
+
 v4.9.4（第四轮对抗性审查修复，2026-08-15）：
   - G2.5/G4.5 决策门真阻断：agent 阶段 auto-advance 除 produces 外还须在
     qa/decision_log.json 查到对应 gate 条目（reason 达标、非 AI 代写）——
@@ -94,11 +101,19 @@ for stream in (sys.stdout, sys.stderr):
 # 两链对同一份 blind_panel_report.json 的结论永不分裂（同 verify_gate 的
 # missing_verify_for_models 被 final_gate_runner 复用的共用模式）。
 # 脚本方式运行时 sys.path[0] 即本目录；被当作模块 import 时补目录重试。
+# 第五轮复审（MEDIUM）：两段 import 都失败（模块被删/损坏/语法错）不再裸 ImportError
+# 崩穿整脚本——置 None 留错误串，championship_missing_evidence 落结构化缺失条目
+# （S8 据此不得 approved，fail-closed），与 final_gate_runner 的结构化 FAIL step 同口径。
+_BLIND_PANEL_SCHEMA_ERR = ""
 try:
     from blind_panel_schema import blind_panel_report_problems
-except ImportError:  # pragma: no cover - 仅在被作为模块导入且 sys.path 无本目录时触发
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from blind_panel_schema import blind_panel_report_problems
+except Exception:
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from blind_panel_schema import blind_panel_report_problems
+    except Exception as _exc:  # pragma: no cover - 模块缺失/损坏场景
+        blind_panel_report_problems = None
+        _BLIND_PANEL_SCHEMA_ERR = f"{type(_exc).__name__}: {_exc}"
 
 # ── 路径 ──
 WORK_DIR = Path.cwd()
@@ -127,8 +142,10 @@ ADVANCED_STATUSES = {"approved", "skipped"}
 # 由 final_gate_runner 与本文件共用同一校验函数——两链口径唯一来源，勿在此重复定义。
 
 # md 报告的状态行（P2-12）：与 check_paper_format.check_render_report 同一形态
-# （"- Status: `GENERATED|DEGRADED`"），供 _report_status 解析 format_formal_docx 的 md 报告
-MD_STATUS_RE = re.compile(r"-\s*Status:\s*`?([A-Za-z]+)`?")
+# （"- Status: `GENERATED|DEGRADED`"），供 _report_status 解析 format_formal_docx 的 md 报告。
+# 第五轮复审（LOW 实证）：词元加下划线——PASS_WITH_SKIP 旧正则 [A-Za-z]+ 截成 PASS，
+# 被归入纯 PASS 侧（SKIP≠PASS 的三态口径被打穿），现 [A-Za-z_]+ 全词接住归 SKIP 侧
+MD_STATUS_RE = re.compile(r"-\s*Status:\s*`?([A-Za-z_]+)`?")
 
 
 # ── 阶段定义（对齐 pipeline_manager.py STAGE_ORDER）──
@@ -516,6 +533,12 @@ def championship_missing_evidence(stage: dict) -> list[tuple[dict, str]]:
     for ev in stage.get("championship_evidence", []):
         path = OUTPUT_DIR / ev["file"]
         if ev.get("schema") == "blind_panel" or path.name == "blind_panel_report.json":
+            if blind_panel_report_problems is None:
+                # 第五轮复审（MEDIUM）：schema 模块不可用 = 结构化缺失条目（fail-closed），
+                # S8 据此不得 approved，不再裸 ImportError 崩穿整脚本
+                missing.append((ev, f"schema 模块不可用（fail-closed）——无法校验盲评报告: "
+                                    f"{_BLIND_PANEL_SCHEMA_ERR}；修复 tools/quality_gate/blind_panel_schema.py 后重跑"))
+                continue
             problems, _data = blind_panel_report_problems(path)
             missing.extend((ev, p) for p in problems)
             continue

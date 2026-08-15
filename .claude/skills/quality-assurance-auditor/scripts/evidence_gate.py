@@ -75,6 +75,25 @@ IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp", ".ti
 # 判断来源字符串是否"像一个文件路径"（含路径分隔符，或以扩展名结尾）
 _PATH_LIKE_RE = re.compile(r"\.[A-Za-z0-9]{1,6}$")
 
+# ── 合法"论文正文"来源显式豁免（第四轮修复：幽灵 CRITICAL 升级后的误伤面）──
+# 纯示意表/符号表等真无独立产物的表格，来源如实写「论文正文」——升级前降为
+# WARNING，升级后 CRITICAL 直接 FAIL（如实登记反而被罚）。豁免必须显式声明：
+#   - 条目级：索引条目写 "source_type": "paper_inline"
+#   - CLI 级：--allow-inline-source（豁免全部"来源非文件"条目，粒度粗，慎用）
+# 豁免 ≠ 核验：被豁免条目计数披露（报告 + stdout："inline 来源 N 条，未核验磁盘"），
+# 绝不装作已核验；未声明的「论文正文」仍 CRITICAL。
+# 豁免只作用于"来源非文件"两分支（无 path/source、或来源不像文件路径）；
+# 声明了文件路径但磁盘不存在的条目仍 CRITICAL——豁免不是幽灵链的逃生门。
+INLINE_SOURCE_TYPE = "paper_inline"
+
+
+def entry_inline_exempt(entry: dict[str, Any], allow_all_inline: bool) -> bool:
+    """该索引条目是否声明了合法 inline 来源豁免（条目级 source_type 或 CLI 全局开关）。"""
+    if allow_all_inline:
+        return True
+    declared = str(entry.get("source_type") or "").strip().lower()
+    return declared == INLINE_SOURCE_TYPE
+
 
 def configure_utf8_stdio() -> None:
     for stream in (sys.stdout, sys.stderr):
@@ -198,7 +217,9 @@ def index_entry_path(entry: dict[str, Any]) -> str | None:
     return None
 
 
-def check_index_entries_disk(entries: list[dict[str, Any]], kind: str) -> tuple[list[str], list[str]]:
+def check_index_entries_disk(
+    entries: list[dict[str, Any]], kind: str, allow_inline_source: bool = False
+) -> tuple[list[str], list[str], list[str]]:
     """逐条核验 figure/table 索引条目声明的产物文件在磁盘真实存在。
 
     定级（CR-8 + P1-7 幽灵链收口）：
@@ -208,30 +229,53 @@ def check_index_entries_disk(entries: list[dict[str, Any]], kind: str) -> tuple[
     - 来源非文件（如「论文正文」）→ FAIL（CRITICAL）：同上，非文件来源同样不可核验；
     - 声明了文件路径但磁盘不存在 → FAIL（CRITICAL）：论文引用了不存在的证据。
     条目自报的 exists 字段一律忽略，只认磁盘事实。
+
+    inline 豁免（第四轮修复，仅作用于前两条"来源非文件"分支）：
+    条目声明 "source_type": "paper_inline"（或 CLI --allow-inline-source）时，
+    前两分支不 FAIL，改记入 inline_exempted 清单供计数披露——"inline 来源 N 条，
+    未核验磁盘"，绝不装作已核验。声明了文件路径但磁盘不存在的条目不可豁免。
+
+    返回 (failures, warnings, inline_exempted)。
     """
     failures: list[str] = []
     warnings: list[str] = []
+    inline_exempted: list[str] = []
     for entry in entries:
         if not isinstance(entry, dict):
             continue
         qid = str(entry.get("question_id") or "ALL")
         ident = str(entry.get("figure_id") or entry.get("id") or entry.get("title") or "?")
         text = index_entry_path(entry)
+        via_cli = allow_inline_source and str(entry.get("source_type") or "").strip().lower() != INLINE_SOURCE_TYPE
         if text is None:
+            if entry_inline_exempt(entry, allow_inline_source):
+                inline_exempted.append(
+                    f"{qid}: {kind}条目 [{ident}] 未声明产物路径，"
+                    f"{'CLI --allow-inline-source' if via_cli else 'source_type=paper_inline 声明'}豁免（来源=论文正文，无独立产物）"
+                )
+                continue
             failures.append(
                 f"{qid}: {kind}条目 [{ident}] 未声明 path/source 产物路径——"
-                f"索引条目必须声明可核验的产物路径（无路径=不可核验，不装作已核验）"
+                f"索引条目必须声明可核验的产物路径（无路径=不可核验，不装作已核验）；"
+                f"真无独立产物（纯示意表/符号表）请显式声明 source_type=paper_inline 并接受计数披露"
             )
             continue
         if not looks_like_file_path(text):
+            if entry_inline_exempt(entry, allow_inline_source):
+                inline_exempted.append(
+                    f"{qid}: {kind}条目 [{ident}] 来源「{text}」，"
+                    f"{'CLI --allow-inline-source' if via_cli else 'source_type=paper_inline 声明'}豁免（来源=论文正文，无独立产物）"
+                )
+                continue
             failures.append(
                 f"{qid}: {kind}条目 [{ident}] 来源「{text}」非文件路径——"
-                f"索引条目必须声明可核验的产物路径（非文件来源=不可核验，不装作已核验）"
+                f"索引条目必须声明可核验的产物路径（非文件来源=不可核验，不装作已核验）；"
+                f"真无独立产物（纯示意表/符号表）请显式声明 source_type=paper_inline 并接受计数披露"
             )
             continue
         if not any(candidate.exists() for candidate in artifact_candidates(text)):
             failures.append(f"{qid}: {kind}条目 [{ident}] 指向的文件不存在（磁盘事实）：{text}")
-    return failures, warnings
+    return failures, warnings, inline_exempted
 
 
 def diff_figures_dir_vs_index(figure_entries: list[dict[str, Any]]) -> list[str]:
@@ -495,7 +539,7 @@ def task_items(data: Any) -> dict[str, list[dict[str, Any]]]:
     return grouped
 
 
-def evaluate() -> dict[str, Any]:
+def evaluate(allow_inline_source: bool = False) -> dict[str, Any]:
     figure_index_path = first_existing(FIGURE_INDEX_CANDIDATES)
     table_index_path = first_existing(TABLE_INDEX_CANDIDATES)
     model_route = load_json(MODEL_ROUTE_FILE)
@@ -558,12 +602,17 @@ def evaluate() -> dict[str, Any]:
     table_entries = table_index.get("tables") if isinstance(table_index, dict) else []
     table_entries = table_entries if isinstance(table_entries, list) else []
 
-    fig_failures, fig_path_warnings = check_index_entries_disk(figure_entries, "figure")
-    tbl_failures, tbl_path_warnings = check_index_entries_disk(table_entries, "table")
+    fig_failures, fig_path_warnings, fig_inline = check_index_entries_disk(
+        figure_entries, "figure", allow_inline_source
+    )
+    tbl_failures, tbl_path_warnings, tbl_inline = check_index_entries_disk(
+        table_entries, "table", allow_inline_source
+    )
     failures.extend(fig_failures)
     failures.extend(tbl_failures)
     warnings.extend(fig_path_warnings)
     warnings.extend(tbl_path_warnings)
+    inline_exempted = fig_inline + tbl_inline
     warnings.extend(diff_figures_dir_vs_index(figure_entries))
     warnings.extend(check_task_artifacts(task_map))
 
@@ -658,6 +707,12 @@ def evaluate() -> dict[str, Any]:
         "failures": failures,
         "warnings": warnings,
         "questions": question_reports,
+        # inline 豁免计数披露（第四轮修复）：豁免 ≠ 核验，count>0 时 stdout/MD 同步披露
+        "inline_source": {
+            "count": len(inline_exempted),
+            "disclosure": f"inline 来源 {len(inline_exempted)} 条，未核验磁盘",
+            "entries": inline_exempted,
+        },
     }
 
 
@@ -680,6 +735,15 @@ def write_reports(report: dict[str, Any], mode: str) -> None:
     if report["warnings"]:
         lines.append("## Warnings")
         lines.extend(f"- {item}" for item in report["warnings"])
+        lines.append("")
+    inline = report.get("inline_source") or {}
+    if inline.get("count"):
+        lines.append("## Inline Source Disclosure")
+        lines.append(
+            f"- inline 来源 {inline['count']} 条，未核验磁盘"
+            f"（paper_inline 豁免 = 合法「论文正文」来源，豁免 ≠ 核验）"
+        )
+        lines.extend(f"- {item}" for item in inline.get("entries", []))
         lines.append("")
     lines.append("## Questions")
     for item in report["questions"]:
@@ -736,15 +800,24 @@ def main() -> int:
         default="paper_output",
         help="论文产物目录（相对当前工作目录或绝对路径；默认 paper_output，无参行为不变）",
     )
+    parser.add_argument(
+        "--allow-inline-source",
+        action="store_true",
+        help="豁免全部「来源非文件」的索引条目（合法论文正文来源；豁免条目计数披露为"
+             "「inline 来源 N 条，未核验磁盘」，不装作已核验）。条目级替代：单条写 "
+             "source_type=paper_inline。声明了文件路径但磁盘不存在的条目不受此开关影响",
+    )
     args = parser.parse_args()
 
     reconfigure_paths(args.paper_dir)
 
-    report = evaluate()
+    report = evaluate(allow_inline_source=args.allow_inline_source)
     write_reports(report, args.mode)
 
     # P1-11：报告落地即绑定源哈希——只绑本门禁的核心依赖（索引/tasks/results 关键件）；
-    # record 失败降级为 warning，不改变门禁判定。
+    # 第四轮修复（freshness 源清单补 figures/ + tables/）：图表/表格产物目录一并绑定——
+    # 换图/删图/改表后旧报告应 STALE，旧清单漏掉产物目录使"图已换、报告仍 FRESH"。
+    # 不存在的目录由 record_freshness 自然跳过（tables/ 无实物时不绑，不造空哈希）。
     downgrade = record_freshness(
         REPORT_JSON,
         [
@@ -755,6 +828,8 @@ def main() -> int:
             CONCLUSIONS_FILE,
             first_existing(TABLE_INDEX_CANDIDATES),
             TASKS_FILE,
+            OUTPUT_DIR / "figures",
+            OUTPUT_DIR / "tables",
         ],
     )
     if downgrade:
@@ -775,6 +850,10 @@ def main() -> int:
             pass
 
     print(f"证据门禁报告：{REPORT_MD}")
+    # inline 豁免计数披露（stdout；报告 JSON/MD 已同步）——豁免 ≠ 核验，必须可见
+    inline_count = (report.get("inline_source") or {}).get("count", 0)
+    if inline_count:
+        print(f"ℹ️ inline 来源 {inline_count} 条，未核验磁盘（paper_inline 豁免；详见报告 Inline Source Disclosure 节）。")
     if report["status"] == "PASS":
         print("✅ 证据门禁通过，可以进入正式全局写作与最终 QA。")
         return 0

@@ -24,6 +24,12 @@ schema 依据 .claude/skills/blind-panel/SKILL.md：
   - seats ≥3 座；每座 weighted_total 必须是有限数值且 ≥0
     （bool/NaN/inf/负数/缺失/非数值/座值为非对象 一律拒）
   - aggregate.evidence_conflicts 非空（>20 分冲突未经 lead 仲裁）→ 拒
+
+第五轮复审（MEDIUM，2026-08-15）：校验器健壮性——evidence_conflicts 为非列表真值
+（如 int 5）时旧版 len() 直接 TypeError 崩穿两链（final_gate_runner 整脚本
+traceback、final_gate_report.json 都写不出来）。现约定：本模块对任何输入只产出
+"问题条目"，绝不抛未捕获异常；校验器自身故障按 fail-closed 处理（记一条问题，
+等价于不合规），消费方据此给结构化 FAIL step。
 """
 from __future__ import annotations
 
@@ -38,7 +44,19 @@ MIN_REPORT_BYTES = 10
 
 
 def validate_blind_panel_data(data: object) -> list[str]:
-    """校验已解析的盲评聚合 JSON（dict）。返回问题清单（空列表 = 合格且 verdict=pass）。"""
+    """校验已解析的盲评聚合 JSON（dict）。返回问题清单（空列表 = 合格且 verdict=pass）。
+
+    第五轮复审（MEDIUM）：整体兜底——实现层任何内部异常都在此收敛为一条问题
+    条目（fail-closed，等价于不合规），绝不以 traceback 穿透
+    final_gate_runner / pipeline_runner 两条消费链。
+    """
+    try:
+        return _validate_blind_panel_data_impl(data)
+    except Exception as exc:  # noqa: BLE001 —— 校验器自身故障也必须以"问题条目"落地
+        return [f"盲评校验器内部异常（fail-closed，按不合规处理）: {type(exc).__name__}: {exc}"]
+
+
+def _validate_blind_panel_data_impl(data: object) -> list[str]:
     problems: list[str] = []
     if not isinstance(data, dict):
         return ["JSON 顶层不是对象——不符合 blind-panel 聚合 schema"]
@@ -96,10 +114,18 @@ def validate_blind_panel_data(data: object) -> list[str]:
             problems.append("座位加权总分校验失败：" + "; ".join(bad))
     conflicts = agg.get("evidence_conflicts") if isinstance(agg, dict) else None
     if conflicts:
-        problems.append(
-            f"aggregate.evidence_conflicts 非空（{len(conflicts)} 处 >20 分冲突"
-            f"未经 lead 仲裁）——未解决的证据冲突不得放行"
-        )
+        if isinstance(conflicts, list):
+            problems.append(
+                f"aggregate.evidence_conflicts 非空（{len(conflicts)} 处 >20 分冲突"
+                f"未经 lead 仲裁）——未解决的证据冲突不得放行"
+            )
+        else:
+            # 第五轮复审（MEDIUM）：非列表真值（int 5 / 非空 dict / 非空 str 等）旧版
+            # len() 直接 TypeError 崩穿两链——现归入问题清单（schema 应为冲突条目数组）
+            problems.append(
+                f"aggregate.evidence_conflicts 非列表（实际类型 {type(conflicts).__name__}）"
+                f"——不符合 blind-panel 聚合 schema（应为冲突条目数组），不得放行"
+            )
     return problems
 
 
@@ -111,7 +137,10 @@ def blind_panel_report_problems(path: Path) -> tuple[list[str], object]:
     """
     if not path.exists():
         return [f"文件不存在：{path}"], None
-    size = path.stat().st_size
+    try:
+        size = path.stat().st_size
+    except OSError as exc:  # 并发删除等竞态：fail-closed 记问题，不崩穿
+        return [f"文件状态不可读: {exc}"], None
     if size < MIN_REPORT_BYTES:
         return [f"文件仅 {size} 字节（疑似占位）"], None
     try:

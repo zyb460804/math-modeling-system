@@ -13,19 +13,25 @@
     - 控制台报告
     - paper_output/qa/render_check_report.json
 
-三态说明（2026-08 修复 CR-9a“橡皮图章”）：
-    PASS            所有已实现检查全部通过
-    PASS_WITH_SKIP  已实现检查通过，但存在未实现自动检测的检查项（SKIP/N/A）——
-                    总体不得是纯 PASS，属于 WARNING 级：哪些查了、哪些没查必须可见
-    WARN / FAIL / ERROR  同原语义（WARN 及以上仍以 rc=1 结束）
+状态与 rc 语义（2026-08-15 第四轮修复 WARN 语义坍缩）：
+    PASS            所有已实现检查全部通过                                → rc=0
+    PASS_WITH_SKIP  已实现检查通过，但存在未实现自动检测的检查项（SKIP/N/A）  → rc=0
+                    ——部分检查项未实现自动检测 ≠ 质量告警；哪些查了、哪些没查
+                    在 stdout/报告可见（CR-9a“橡皮图章”修复保留）
+    WARN            advisory 告警（白区>80% / 文件<1KB / 边缘内容等建议改进） → rc=2
+                    ——“留白偏大”≠“不可交付”：经 auto_detect 等包装器映射为
+                    warn 态（明示、计数、不进修复轮、不计失败），与 final_gate_runner
+                    的 rc=2=advisory 约定对齐；旧版 WARN 也 rc=1，被包装器当 fail
+                    阻断交付（语义坍缩）
+    FAIL / ERROR    不可交付（文件不存在/损坏/无法解析）                      → rc=1
     font_size / text_overlap / label_clarity（及非 PNG 路径的 text_quality）为 SKIP：
     本脚本基于成品位图无法可靠测量字号/重叠/清晰度，不再假装 PASS——
     文字重叠由 math-figure/scripts/figqa.py::assert_no_overlap 碰撞门承接
     （出图脚本 savefig 前已接线），字号与标签清晰度需人工确认。
 
-check-all 口径统一（2026-08-15，第三轮审查 E）：
-    - 汇总中 warned>0 → rc=1（与单图 check 对 WARN rc=1 同口径；旧版只数
-      failed，同一张 WARN 图单图 rc=1 而 check-all rc=0，口径分裂）
+check-all 口径统一（2026-08-15，第三轮审查 E + 第四轮 WARN 语义修复）：
+    - failed>0 → rc=1（FAIL/ERROR 阻断）
+    - 仅 warned>0 → rc=2（advisory，不阻断交付；旧版 rc=1 被 auto_detect 当 fail）
     - PASS_WITH_SKIP 仍 rc=0（部分检查项未实现自动检测 ≠ 质量告警）
     - 目标目录不存在 → rc=1 并明示（旧版 rc=0 + "总计 0" 是假绿）
 """
@@ -454,7 +460,16 @@ def main():
             if "note" in check_data:
                 print(f"  {check_data['note']}")
 
-        sys.exit(0 if result["overall_status"] in ("PASS", "SKIP", "PASS_WITH_SKIP") else 1)
+        # rc 语义（第四轮 WARN 语义修复）：PASS/PASS_WITH_SKIP/SKIP → 0；
+        # WARN → 2（advisory，“留白偏大/文件偏小/边缘内容”≠不可交付，不进修复轮）；
+        # FAIL/ERROR → 1
+        status = result["overall_status"]
+        if status in ("PASS", "SKIP", "PASS_WITH_SKIP"):
+            sys.exit(0)
+        if status == "WARN":
+            print("\n⚠️ WARN（advisory，不阻断交付）：rc=2")
+            sys.exit(2)
+        sys.exit(1)
 
     elif args.command == "check-all":
         figures_dir = Path(args.dir)
@@ -479,12 +494,19 @@ def main():
             print("\n❌ 目标目录不存在——本次未检查任何图表（≠ 通过），rc=1")
             sys.exit(1)
 
-        # 第三轮审查 E：check-all 与单图 check 口径统一——WARN 计入失败判定
-        # （旧版只数 failed，同一张 WARN 图单图 rc=1 而 check-all rc=0）；
-        # PASS_WITH_SKIP 仍 rc=0（未实现自动检测 ≠ 质量告警）
+        # rc 语义（第四轮 WARN 语义修复，与单图 check 同口径）：
+        # - failed>0 → rc=1（FAIL/ERROR 阻断）
+        # - 仅 warned>0 → rc=2（advisory 告警不阻断——“留白偏大/文件偏小/边缘内容”
+        #   ≠ 不可交付；旧版 WARN 也 rc=1，经 auto_detect 当 fail 触发修复轮，
+        #   属 WARN 语义坍缩）
+        # - PASS_WITH_SKIP 仍 rc=0（未实现自动检测 ≠ 质量告警）
+        if results["failed"] > 0:
+            print(f"\n❌ {results['failed']} 个图表 FAIL/ERROR（不可交付，阻断）：rc=1")
+            sys.exit(1)
         if results["warned"] > 0:
-            print(f"\n⚠️ {results['warned']} 个图表为 WARN 级：与单图 check 同口径计入失败判定，rc=1")
-        sys.exit(0 if (results["failed"] == 0 and results["warned"] == 0) else 1)
+            print(f"\n⚠️ {results['warned']} 个图表为 WARN 级（advisory，不阻断交付）：rc=2")
+            sys.exit(2)
+        sys.exit(0)
 
     else:
         parser.print_help()

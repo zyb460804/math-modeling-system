@@ -20,6 +20,15 @@ import os
 from pathlib import Path
 from datetime import datetime
 
+# Windows GBK 控制台兼容：强制 stdout/stderr 走 utf-8（与 auto_detect_and_fix.py 同款）。
+# 本脚本会把子进程输出（如 render_check 的 "⚠️ … rc=2" 告警行）原样回显，
+# GBK 控制台编不出 ⚠（U+26A0）会直接 UnicodeEncodeError 崩栈（第四轮实弹发现）。
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+except Exception:
+    pass
+
 # 项目根目录
 ROOT = Path(__file__).resolve().parents[4]
 QA_DIR = ROOT / "paper_output" / "qa"
@@ -145,7 +154,10 @@ def run_detector(name: str, config: dict) -> dict:
     - 子进程解释器用 sys.executable（本机全局 python 指向坏 venv，PATH 上的 "python" 不可用）；
     - 检测器自定义参数经 config["args"] 透传（figure 的 render_check.py 不带子命令
       只打印 help 且 rc=0，旧写法使图表检测通道恒绿）；
-    - rc=0 但输出行首 SKIP = 未实际检查，返回 skip_reason 供调用方明示（不冒充通过）。
+    - rc=0 但输出行首 SKIP = 未实际检查，返回 skip_reason 供调用方明示（不冒充通过）；
+    - rc=2 = advisory WARN（第四轮 WARN 语义修复，与 auto_detect_and_fix.py 同源）：
+      render_check 用它表达白区>80%/<1KB/边缘内容等建议改进级问题——"留白偏大"
+      ≠"不可交付"，按通过处理但不冒充 [OK]，返回 warn_reason 供调用方 [!] WARN 明示。
     """
     script = config["script"]
     if not script.exists():
@@ -174,7 +186,14 @@ def run_detector(name: str, config: dict) -> dict:
             errors="replace",
         )
         output = (result.stdout or "") + (result.stderr or "")
-        passed = result.returncode == 0
+        # rc=2（advisory WARN，目前仅 render_check 使用）按通过处理，但不冒充 [OK]：
+        # warn_reason 交调用方以 [!] WARN 明示（第四轮 WARN 语义修复，同步
+        # auto_detect_and_fix.py 的 warn 态——"留白偏大"≠"不可交付"）
+        passed = result.returncode in (0, 2)
+        warn_reason = None
+        if result.returncode == 2:
+            warn_lines = [ln.strip() for ln in output.splitlines() if ln.strip()]
+            warn_reason = warn_lines[-1] if warn_lines else "rc=2（advisory）"
         skip_reason = _skip_reason(output) if passed else None
 
         # 解析错误信息
@@ -209,9 +228,18 @@ def run_detector(name: str, config: dict) -> dict:
                     ):
                         errors.append(line)
 
-        status = "[OK] PASS" if passed else "[!!] FAIL"
+        if warn_reason:
+            status = "[!] WARN（advisory，不阻断）"
+        else:
+            status = "[OK] PASS" if passed else "[!!] FAIL"
         print(f"    {status} ({len(errors)} 个问题)")
-        return {"passed": passed, "errors": errors, "output": output, "skip_reason": skip_reason}
+        return {
+            "passed": passed,
+            "errors": errors,
+            "output": output,
+            "skip_reason": skip_reason,
+            "warn_reason": warn_reason,
+        }
 
     except subprocess.TimeoutExpired:
         print("    [~] 超时")
@@ -303,6 +331,11 @@ def run_stage(name: str, max_rounds: int = 3, dry_run: bool = False) -> bool:
         if result.get("skip_reason"):
             # rc=0 但行首 SKIP（如缺 qa_config）：未实际检查 ≠ 通过，明示后不阻断
             print(f"\n  [--] SKIP（未实际检查 ≠ 通过）：{result['skip_reason']}")
+            return True
+
+        if result.get("warn_reason"):
+            # rc=2 advisory WARN：不阻断、不进修复轮，但绝不冒充 [OK] 通过
+            print(f"\n  [!] WARN（advisory，不阻断）：{config['description']} — {result['warn_reason'][:200]}")
             return True
 
         if result["passed"]:
