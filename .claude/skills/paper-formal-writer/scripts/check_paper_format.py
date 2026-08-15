@@ -16,8 +16,15 @@ FALLBACK_SOURCE_FILE = OUTPUT_DIR / "final_paper.md"
 DOCX_FILE = OUTPUT_DIR / "final_paper.docx"
 OUTLINE_FILE = OUTPUT_DIR / "plan" / "paper_outline.json"
 FIGURE_INDEX_FILE = OUTPUT_DIR / "figure_index.json"
+FIGURE_INDEX_FALLBACK = OUTPUT_DIR / "figures" / "figure_index.json"
 TABLE_INDEX_FILE = OUTPUT_DIR / "tables" / "table_index.json"
-REPORT_MD = OUTPUT_DIR / "format_check_report.md"
+TABLE_INDEX_FALLBACK = OUTPUT_DIR / "table_index.json"
+# format_formal_docx.py 的渲染报告（Status: GENERATED/DEGRADED + OMML fallback 计数）
+RENDER_REPORT_FILE = OUTPUT_DIR / "format_check_report.md"
+# 双写冲突修复（MEDIUM）：format_check_report.md 由 format_formal_docx.py 独占，
+# 本门禁输出改独立文件名 format_check_gate_report.md。
+# format_check_report.json 保持原名——workflow_guard.py check_s8 按该名消费 status。
+REPORT_MD = OUTPUT_DIR / "format_check_gate_report.md"
 REPORT_JSON = OUTPUT_DIR / "format_check_report.json"
 
 PLACEHOLDERS = [
@@ -144,20 +151,56 @@ def qids_from_outline(outline: Any) -> list[str]:
     return sorted(set(qids), key=natural_q_key)
 
 
-def index_items(data: Any, key: str, id_key: str) -> list[dict[str, Any]]:
+def load_first(*paths: Path) -> Any:
+    """按候选路径加载 JSON，第一个存在的胜出（索引文件根/子目录双布局兼容）"""
+    for path in paths:
+        if path.exists():
+            data = load_json(path)
+            if isinstance(data, dict) and "__error__" not in data:
+                return data
+    return {}
+
+
+def item_id(item: dict[str, Any], *id_keys: str) -> str:
+    for key in id_keys:
+        value = item.get(key)
+        if value:
+            return str(value)
+    return "?"
+
+
+def index_items(data: Any, key: str, *id_keys: str) -> list[dict[str, Any]]:
+    """取索引条目。id 键双读（对齐 evidence_gate）：figure 条目用 figure_id，
+    table 条目实际可能是 table_id 或 id——单键读取会把整个维度架空。"""
     if not isinstance(data, dict):
         return []
-    return [item for item in data.get(key, []) if isinstance(item, dict) and item.get(id_key)]
+    items = data.get(key, [])
+    if not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, dict) and any(item.get(k) for k in id_keys)]
 
 
-def referenced(text: str, item: dict[str, Any], id_key: str) -> bool:
-    candidates = [
-        str(item.get(id_key) or ""),
-        str(item.get("title") or ""),
-        Path(str(item.get("path") or item.get("expected_path") or "")).stem,
-    ]
+def referenced(text: str, item: dict[str, Any], kind: str, *id_keys: str) -> bool:
+    """正文是否引用了该图/表。
+
+    除 id/标题/文件名 stem 直接命中外，支持中文编号引用「图 N」「表 N」
+    （N 取 id 字段中的数字，如 F1/T1 → 1）——正文交叉引用的实际形态。
+    """
+    candidates = [str(item.get(key) or "") for key in id_keys]
+    candidates.append(str(item.get("title") or ""))
+    stem_source = item.get("path") or item.get("expected_path") or ""
+    if stem_source:
+        candidates.append(Path(str(stem_source)).stem)
     candidates = [candidate.strip() for candidate in candidates if candidate and candidate.strip()]
-    return any(candidate in text for candidate in candidates)
+    if any(candidate in text for candidate in candidates):
+        return True
+
+    label = "图" if kind == "figure" else "表"
+    for key in (*id_keys, "number"):
+        match = re.search(r"(\d+)", str(item.get(key) or ""))
+        if match and re.search(rf"{label}\s*{match.group(1)}(?!\d)", text):
+            return True
+    return False
 
 
 def check_docx_structure(path: Path) -> dict[str, Any]:
@@ -378,11 +421,52 @@ def extract_docx_text(path: Path) -> str:
         return ""
 
 
+def check_render_report(path: Path) -> dict[str, Any]:
+    """读 format_formal_docx 的渲染报告（CR-7 证据接进门禁）。
+
+    - Status: DEGRADED → failure（公式链退化：引擎不可用或有回退）
+    - OMML fallback > 0 → failure（有公式退化为 Cambria Math 纯文本）
+    - 报告缺失 → warning（公式链退化不可见，不能装作已核验）
+    """
+    result: dict[str, Any] = {"exists": False, "status": "MISSING", "omml_fallback": None,
+                              "failures": [], "warnings": []}
+    if not path.exists():
+        result["warnings"].append(
+            f"未找到 format_formal_docx 渲染报告（{rel(path)}），公式链退化不可见——"
+            "请先运行 format_formal_docx.py 再过本门禁"
+        )
+        return result
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace")
+    except Exception as exc:
+        result["warnings"].append(f"渲染报告无法读取：{exc}")
+        return result
+
+    status_match = re.search(r"-\s*Status:\s*`?([A-Za-z]+)`?", content)
+    result["exists"] = True
+    result["status"] = status_match.group(1) if status_match else "UNKNOWN"
+    fallback_match = re.search(r"OMML formulas \(fallback[^)]*\):\s*`?(\d+)", content)
+    if fallback_match:
+        result["omml_fallback"] = int(fallback_match.group(1))
+
+    if result["status"] == "DEGRADED":
+        result["failures"].append(
+            f"format_formal_docx 渲染报告状态 DEGRADED：公式链退化（详见 {rel(path)}），正式交付前必须修复"
+        )
+    if result["omml_fallback"] is not None and result["omml_fallback"] > 0:
+        result["failures"].append(
+            f"OMML 公式回退 {result['omml_fallback']} 个（Cambria Math 纯文本，非 Word 原生公式），正式交付前应归零"
+        )
+    if result["status"] not in ("GENERATED", "DEGRADED"):
+        result["warnings"].append(f"渲染报告状态异常：{result['status']}")
+    return result
+
+
 def evaluate(source_override: Path | None = None) -> dict[str, Any]:
     source = source_override if source_override is not None else source_path()
     outline = load_json(OUTLINE_FILE)
-    figure_index = load_json(FIGURE_INDEX_FILE)
-    table_index = load_json(TABLE_INDEX_FILE)
+    figure_index = load_first(FIGURE_INDEX_FILE, FIGURE_INDEX_FALLBACK)
+    table_index = load_first(TABLE_INDEX_FILE, TABLE_INDEX_FALLBACK)
     failures: list[str] = []
     warnings: list[str] = []
 
@@ -419,9 +503,17 @@ def evaluate(source_override: Path | None = None) -> dict[str, Any]:
         failures.append(f"正文含 U+FFFD 替换符（编码丢字信号）：{fffd_count} 处，需人工核对源稿补全")
 
     counts = char_count(text)
-    target_words = outline.get("target_words", {}) if isinstance(outline, dict) else {}
-    min_words = int(target_words.get("min", 18000) or 18000)
-    max_words = int(target_words.get("max", 25000) or 25000)
+    # target_words 兼容两种形态（C-①）：
+    #   int（真实 outline 即 int 18000，单值即下限） / dict（{"min":..., "max":...}）
+    raw_target = outline.get("target_words") if isinstance(outline, dict) else None
+    if isinstance(raw_target, dict):
+        min_words = int(raw_target.get("min", 18000) or 18000)
+        max_words = int(raw_target.get("max", 25000) or 25000)
+    elif isinstance(raw_target, int) and not isinstance(raw_target, bool) and raw_target > 0:
+        min_words = raw_target
+        max_words = max(25000, raw_target)
+    else:
+        min_words, max_words = 18000, 25000
     # 使用 nonspace 计数（包含标点），更适合中文学术论文
     # 对于 docx 来源，使用更宽松的计数（包含空格）
     if source_label == "docx":
@@ -466,10 +558,12 @@ def evaluate(source_override: Path | None = None) -> dict[str, Any]:
         question_reports.append({"question_id": qid, "status": "FAIL" if q_failures else "PASS", "failures": q_failures})
         failures.extend(q_failures)
 
-    figures = index_items(figure_index, "figures", "figure_id")
-    tables = index_items(table_index, "tables", "table_id")
-    missing_figures = [item.get("figure_id") for item in figures if not referenced(text, item, "figure_id")]
-    missing_tables = [item.get("table_id") for item in tables if not referenced(text, item, "table_id")]
+    figures = index_items(figure_index, "figures", "figure_id", "id")
+    tables = index_items(table_index, "tables", "table_id", "id")
+    missing_figures = [item_id(item, "figure_id", "id") for item in figures
+                       if not referenced(text, item, "figure", "figure_id", "id")]
+    missing_tables = [item_id(item, "table_id", "id") for item in tables
+                      if not referenced(text, item, "table", "table_id", "id")]
     for figure_id in missing_figures:
         failures.append(f"figure_index.json 中的图片未在正文引用：{figure_id}")
     for table_id in missing_tables:
@@ -506,6 +600,11 @@ def evaluate(source_override: Path | None = None) -> dict[str, Any]:
     failures.extend(font_check.get("failures", []))
     warnings.extend(font_check.get("warnings", []))
 
+    # 渲染报告检查（format_formal_docx 的 CR-7 证据：DEGRADED / OMML fallback）
+    render_check = check_render_report(RENDER_REPORT_FILE)
+    failures.extend(render_check.get("failures", []))
+    warnings.extend(render_check.get("warnings", []))
+
     return {
         "schema_version": "1.0",
         "generated_by": "paper-formal-writer/scripts/check_paper_format.py",
@@ -516,6 +615,12 @@ def evaluate(source_override: Path | None = None) -> dict[str, Any]:
         "docx": rel(DOCX_FILE),
         "counts": counts,
         "target_words": {"min": min_words, "max": max_words},
+        "render_check": {
+            "report": rel(RENDER_REPORT_FILE),
+            "exists": render_check.get("exists", False),
+            "status": render_check.get("status"),
+            "omml_fallback": render_check.get("omml_fallback"),
+        },
         "question_reports": question_reports,
         "figure_count": len(figures),
         "table_count": len(tables),
@@ -592,6 +697,13 @@ def write_reports(report: dict[str, Any]) -> None:
         lines.append(f"- failure: {issue}")
     for issue in report["font_check"]["body_font_issues"] + report["font_check"]["body_size_issues"]:
         lines.append(f"- warning: {issue}")
+    lines.append("")
+    lines.append("## Render Check (format_formal_docx)")
+    render = report.get("render_check", {})
+    lines.append(f"- report: `{render.get('report', 'N/A')}`")
+    lines.append(f"- exists: `{render.get('exists', False)}`")
+    lines.append(f"- status: `{render.get('status', 'N/A')}`")
+    lines.append(f"- omml_fallback: `{render.get('omml_fallback', 'N/A')}`")
     REPORT_MD.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
 
 
@@ -605,7 +717,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
         epilog=(
             "零参数运行保持原行为：优先从 paper_output/final_paper.docx 提取正文，"
             "否则读取 paper_output/final_paper_source.md（缺省回退 final_paper.md）。"
-            "报告写入 paper_output/format_check_report.md 和 format_check_report.json。"
+            "报告写入 paper_output/format_check_gate_report.md（md 与 format_formal_docx 的"
+            " format_check_report.md 分离，避免双写互覆）和 paper_output/format_check_report.json"
+            "（json 保持原名，workflow_guard.py 按该名消费）。"
             "退出码：0=PASS，1=FAIL。"
         ),
     )

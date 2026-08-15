@@ -59,7 +59,7 @@ HIGH_ARTIFACTS = [
 
     # 索引文件
     ("figure_index.json", "HIGH", "图表索引"),
-    ("table_index.json", "HIGH", "表格索引"),
+    ("tables/table_index.json", "HIGH", "表格索引"),
 
     # QA产物
     ("qa/consistency_audit_report.json", "HIGH", "一致性审计报告"),
@@ -83,6 +83,24 @@ CODE_REVIEW_PATTERNS = [
     ("code/{q}/reviews/{q_lower}_python_review.md", "CRITICAL", "Python代码审查"),
     ("code/matlab/{q}/reviews/{q_lower}_matlab_review.md", "CRITICAL", "Matlab代码审查"),
 ]
+
+# 同一产物的候选路径（旧布局/新布局兼容）：命中任一即算存在
+# table_index.json 历史上登记为根路径，实际产物在 tables/ 下 → 路径错位误报（B-①）
+ARTIFACT_FALLBACKS = {
+    "tables/table_index.json": ["table_index.json"],
+    "table_index.json": ["tables/table_index.json"],
+    "figure_index.json": ["figures/figure_index.json"],
+    "figures/figure_index.json": ["figure_index.json"],
+}
+
+
+def resolve_artifact(rel_path: str) -> Path:
+    """按主路径+候选路径解析产物，任一存在即返回该路径；全缺失时返回主路径（用于报告）"""
+    for cand in [rel_path] + ARTIFACT_FALLBACKS.get(rel_path, []):
+        p = OUTPUT_DIR / cand
+        if p.exists():
+            return p
+    return OUTPUT_DIR / rel_path
 
 
 def load_json(path: Path) -> Any:
@@ -194,7 +212,12 @@ def check_frozen_numbers_freshness(q: str) -> dict:
     for source in code_source_files:
         source_path = Path(source.get("path", ""))
         if source_path.exists():
-            source_mtime = datetime.fromtimestamp(source_path.stat().st_mtime)
+            # aware/naive 统一（第一轮 M-9）：frozen_at 带 tz（如 Z 结尾）而 mtime 为
+            # naive 本地时间时直接比较会 TypeError——按 frozen 的 tz 感知化 mtime
+            if frozen_time.tzinfo is not None:
+                source_mtime = datetime.fromtimestamp(source_path.stat().st_mtime, tz=frozen_time.tzinfo)
+            else:
+                source_mtime = datetime.fromtimestamp(source_path.stat().st_mtime)
             if source_mtime > frozen_time:
                 return {
                     "exists": True,
@@ -229,37 +252,46 @@ def run_audit(questions: list[str], verbose: bool = False) -> dict:
     print("\n[1/5] 检查全局产物...")
     for artifact, severity, description in CRITICAL_ARTIFACTS + HIGH_ARTIFACTS:
         total_expected += 1
-        artifact_path = OUTPUT_DIR / artifact
+        artifact_path = resolve_artifact(artifact)
         info = check_file_exists(artifact_path)
 
-        if info["exists"]:
+        if info["exists"] and not info.get("is_empty"):
             total_found += 1
             result["checks"]["global_artifacts"]["details"].append({
                 "path": artifact,
+                "resolved": str(artifact_path.relative_to(OUTPUT_DIR)) if str(artifact_path).startswith(str(OUTPUT_DIR)) else artifact,
                 "status": "OK",
                 "severity": severity,
                 "description": description
             })
         else:
+            # 0 字节产物与缺失同罪（B-②：is_empty 旧来只算不用，空壳文件被当 OK）
+            if info["exists"]:
+                issue_type = "empty_artifact"
+                status_label = "EMPTY"
+            else:
+                issue_type = "missing_critical" if severity == "CRITICAL" else "missing_high"
+                status_label = "MISSING"
+
             if severity == "CRITICAL":
                 result["status"] = "FAIL"
                 result["failures"].append({
-                    "type": "missing_critical",
+                    "type": issue_type,
                     "severity": severity,
                     "artifact": artifact,
-                    "description": description
+                    "description": description + ("（文件存在但为 0 字节空壳）" if info["exists"] else "")
                 })
             else:
                 result["warnings"].append({
-                    "type": "missing_high",
+                    "type": issue_type,
                     "severity": severity,
                     "artifact": artifact,
-                    "description": description
+                    "description": description + ("（文件存在但为 0 字节空壳）" if info["exists"] else "")
                 })
 
             result["checks"]["global_artifacts"]["details"].append({
                 "path": artifact,
-                "status": "MISSING",
+                "status": status_label,
                 "severity": severity,
                 "description": description
             })
@@ -332,6 +364,17 @@ def run_audit(questions: list[str], verbose: bool = False) -> dict:
 
     # 4. 检查每个子问题的产物
     print("\n[4/5] 检查子问题产物...")
+    if not questions:
+        # 扁平布局（results/ 无 Q* 子目录）：per-question 产物检查整体未执行。
+        # 旧实现静默跳过 → 空壳 per-question 也显示 PASS；至少 WARN 让空档可见（B-④）。
+        result["warnings"].append({
+            "type": "per_question_skipped",
+            "severity": "HIGH",
+            "artifact": "results/Q*/",
+            "description": "results/ 下无 Q* 子目录（扁平布局），per-question 产物检查未执行；"
+                           "如需逐问核验请建立 results/Q1..Qn/ 结构，或用 --question 逐个指定"
+        })
+        result["checks"]["per_question"]["status"] = "WARN"
     for q in questions:
         q_lower = q.lower()
         q_result = {
@@ -347,19 +390,20 @@ def run_audit(questions: list[str], verbose: bool = False) -> dict:
             artifact_path = OUTPUT_DIR / pattern.format(q=q, q_lower=q_lower)
             info = check_file_exists(artifact_path)
 
-            if info["exists"]:
+            if info["exists"] and not info.get("is_empty"):
                 total_found += 1
                 q_result["critical"]["found"] += 1
             else:
+                empty_note = "（0 字节空壳）" if info["exists"] else ""
                 q_result["critical"]["missing"].append({
                     "path": pattern.format(q=q, q_lower=q_lower),
-                    "description": description
+                    "description": description + empty_note
                 })
                 result["failures"].append({
-                    "type": "missing_critical",
+                    "type": "empty_artifact" if info["exists"] else "missing_critical",
                     "severity": severity,
                     "artifact": pattern.format(q=q, q_lower=q_lower),
-                    "description": f"{q}: {description}"
+                    "description": f"{q}: {description}{empty_note}"
                 })
 
         # 检查高优先级产物
@@ -370,19 +414,20 @@ def run_audit(questions: list[str], verbose: bool = False) -> dict:
             artifact_path = OUTPUT_DIR / pattern.format(q=q, q_lower=q_lower)
             info = check_file_exists(artifact_path)
 
-            if info["exists"]:
+            if info["exists"] and not info.get("is_empty"):
                 total_found += 1
                 q_result["high"]["found"] += 1
             else:
+                empty_note = "（0 字节空壳）" if info["exists"] else ""
                 q_result["high"]["missing"].append({
                     "path": pattern.format(q=q, q_lower=q_lower),
-                    "description": description
+                    "description": description + empty_note
                 })
                 result["warnings"].append({
-                    "type": "missing_high",
+                    "type": "empty_artifact" if info["exists"] else "missing_high",
                     "severity": severity,
                     "artifact": pattern.format(q=q, q_lower=q_lower),
-                    "description": f"{q}: {description}"
+                    "description": f"{q}: {description}{empty_note}"
                 })
 
         # 检查frozen_numbers时效性
@@ -480,12 +525,16 @@ def generate_markdown_report(report: dict) -> str:
 
     lines.append("")
 
-    # 缺失文件
+    # 缺失文件 / 状态异常（B-③：存在但内容 FAIL 的报告不再混进"缺失"清单渲染）
     failures = report.get("failures", [])
     warnings = report.get("warnings", [])
+    # 属于"文件不在/为空"的类型；其余（audit_not_passed/frozen_stale/...）是"存在但未达标"
+    MISSING_TYPES = {"missing_critical", "missing_high", "missing_audit_report", "empty_artifact"}
+    missing_warnings = [w for w in warnings if w.get("type") in MISSING_TYPES]
+    status_warnings = [w for w in warnings if w.get("type") not in MISSING_TYPES]
 
-    if failures or warnings:
-        lines.append("## 缺失文件")
+    if failures or missing_warnings:
+        lines.append("## 缺失 / 空文件")
         lines.append("")
 
         if failures:
@@ -498,15 +547,28 @@ def generate_markdown_report(report: dict) -> str:
                     lines.append(f"   - 生成方式: {failure['suggestion']}")
                 lines.append("")
 
-        if warnings:
+        if missing_warnings:
             lines.append("### ⚠️ 建议补齐")
             lines.append("")
-            for i, warning in enumerate(warnings, 1):
+            for i, warning in enumerate(missing_warnings, 1):
                 lines.append(f"{i}. **{warning.get('artifact', 'Unknown')}** [{warning.get('severity', 'HIGH')}]")
                 lines.append(f"   - 用途: {warning.get('description', '')}")
                 if "suggestion" in warning:
                     lines.append(f"   - 生成方式: {warning['suggestion']}")
                 lines.append("")
+
+    if status_warnings:
+        lines.append("## 状态异常（文件存在但内容未通过）")
+        lines.append("")
+        for i, warning in enumerate(status_warnings, 1):
+            status_extra = f"（状态: {warning['status']}）" if warning.get("status") else ""
+            lines.append(f"{i}. **{warning.get('artifact', 'Unknown')}** [{warning.get('severity', 'HIGH')}] {status_extra}")
+            lines.append(f"   - 说明: {warning.get('description', '')}")
+            if "reason" in warning:
+                lines.append(f"   - 原因: {warning['reason']}")
+            if "suggestion" in warning:
+                lines.append(f"   - 建议: {warning['suggestion']}")
+            lines.append("")
 
     # 代码审查质量
     code_reviews = checks.get("code_reviews", {}).get("details", [])

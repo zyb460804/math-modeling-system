@@ -13,7 +13,9 @@
 该段缺失/为空时输出 SKIP（退出码 0，与 check_parameter_consistency 的 SKIP 口径一致），
 绝不输出 PASS。配置存在但论文引用了某关键数字、而代码结果文件或对应字段缺失时，
 记 CODE_SOURCE_MISSING 不一致（fail-closed，收口换题恒绿漏洞 CR-1/G-03 复现 A）。
-配置的关键数字在论文中一个都没匹配到时，状态降为 WARNING（"没检查到"不等于"一致"）。
+配置的关键数字在论文中一个都没匹配到（matched==0，未产生任何实际比对）时，
+状态记 SKIP（第二轮审查 HIGH-3：旧版 WARNING 会被流水线当 approved 推进，
+"未产生实际比对"≠"一致"，改按 SKIP 口径诚实展示；部分匹配部分未匹配仍为 WARNING）。
 
 用法：
     python check_number_consistency.py [--paper PAPER_PATH] [--config CONFIG_PATH]
@@ -228,11 +230,15 @@ def generate_report(sections: dict, all_discrepancies: list[dict],
                     unmatched_notes: list[str], matched_count: int) -> dict:
     """生成检查报告。
 
-    有不一致 → FAIL；无不一致但配置的数字一个都没匹配到 → WARNING（不给假绿灯 PASS）。
+    有不一致 → FAIL；配置的数字一个都没匹配到（matched==0，未产生任何实际比对）
+    → SKIP（不给假绿灯 PASS，也不冒充 WARNING 级"已检查"；与 parameter 门禁 SKIP
+    同口径，流水线按 ⏭️ 展示）；部分匹配部分未匹配 → WARNING；全匹配 → PASS。
     """
     total_configured = sum(len(patterns) for patterns in sections.values())
     if all_discrepancies:
         status = "FAIL"
+    elif matched_count == 0:
+        status = "SKIP"
     elif unmatched_notes:
         status = "WARNING"
     else:
@@ -268,6 +274,14 @@ def write_markdown_report(report: dict) -> str:
         lines.append("")
         for note in report["unmatched_notes"]:
             lines.append(f"- {note}")
+        lines.append("")
+
+    if report.get("status") == "SKIP":
+        lines.append("## 说明")
+        lines.append("")
+        lines.append("状态为 SKIP：qa_config 配置了 number_consistency，但 0 个关键数字产生"
+                     "实际比对（pattern 过期或论文未引用）。SKIP ≠ 一致；请核对 pattern "
+                     "或论文引用后重跑，使其转为 PASS/FAIL 实检。")
         lines.append("")
 
     if report["discrepancies"]:
@@ -379,6 +393,10 @@ def main(argv=None) -> int:
     REPORT_MD.write_text(write_markdown_report(report), encoding="utf-8")
 
     print(f"\n{'='*50}")
+    if report["status"] == "SKIP":
+        # 行首 SKIP（runner 的 classify 按 stdout 行识别 SKIP，与报告 JSON status 双保险）
+        print("SKIP：配置存在但 0 个关键数字实际比对（未产生实际比对 ≠ 一致）——"
+              "请核对 pattern 是否过期，或论文是否只引用了配置外的数字")
     print(f"检查完成: {report['status']}")
     print(f"配置检查项: {report['total_configured']}")
     print(f"实际比对: {report['matched']}")
@@ -388,7 +406,8 @@ def main(argv=None) -> int:
         print(f"未匹配: {len(unmatched_notes)} 问（详见报告）")
     print(f"报告: {REPORT_MD}")
 
-    return 0 if report["status"] in ("PASS", "WARNING") else 1
+    # SKIP rc=0：与 check_parameter_consistency 的 SKIP 口径一致（未实检 ≠ 失败）
+    return 0 if report["status"] in ("PASS", "WARNING", "SKIP") else 1
 
 
 if __name__ == "__main__":

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -83,7 +84,11 @@ STATUS_SYMBOLS: dict[str, str] = {
 }
 
 # 注入防护：防止用户/AI 在状态文件中伪造控制标记
-_INJECTION_PATTERNS = ["[APPROVED]", "[REWORK]", "[MANUAL_SPEC]"]
+# （第二轮审查 B7 附带：全角形态与半角一并拦截，防全角标记对扫描隐身）
+_INJECTION_PATTERNS = [
+    "[APPROVED]", "[REWORK]", "[MANUAL_SPEC]",
+    "【APPROVED】", "【REWORK】", "【MANUAL_SPEC】",
+]
 
 # ── HIL 审批标记（CR-6 修复）──────────────────────────────────
 # 批准/返工标记必须独占一行：该行 strip 后恰好等于下列标记之一
@@ -92,6 +97,11 @@ _INJECTION_PATTERNS = ["[APPROVED]", "[REWORK]", "[MANUAL_SPEC]"]
 # 防止"全新模板文件天然 APPROVED"的绕过（CR-6）。
 APPROVED_MARKS = ("[APPROVED]", "【APPROVED】")
 REWORK_MARKS = ("[REWORK]", "【REWORK】")
+# 指定形态（审批令牌绑定，第二轮审查 B-①）：全局 [APPROVED] 对任意在审阶段生效；
+# [APPROVED S5] / 【APPROVED S5_evidence_gate】 只对记号匹配的阶段生效。
+_BOUND_TOKEN = r"[A-Za-z0-9_\-\.]+"
+_APPROVED_BOUND_RE = re.compile(rf"^[\[【]APPROVED[ \t　]+({_BOUND_TOKEN})[\]】]$")
+_REWORK_BOUND_RE = re.compile(rf"^[\[【]REWORK[ \t　]+({_BOUND_TOKEN})[\]】]$")
 
 
 def _marker_line_index(content: str, marks: tuple) -> int:
@@ -100,6 +110,56 @@ def _marker_line_index(content: str, marks: tuple) -> int:
         if raw.strip() in marks:
             return i
     return -1
+
+
+def _token_matches_stage(token: str, stage: str) -> bool:
+    """绑定记号与目标阶段的匹配：全等，或记号恰为阶段 id 的下划线前缀。
+
+    例：S5 ↔ S5_evidence_gate 匹配；S3 不匹配 S3b_code_verify（只认 '_' 边界，
+    防前缀撞车误绑）。比较不区分大小写。
+    """
+    t, s = token.strip().upper(), stage.strip().upper()
+    return t == s or s.startswith(t + "_")
+
+
+def _scan_marker_lines(content: str) -> list[tuple[int, str, str]]:
+    """扫描全部"独占一行"的审批标记，按行号升序返回 [(行号, APPROVED|REWORK, 绑定记号)]。
+
+    绑定记号：全局形态为 ""；指定形态为记号本身。行内混排（模板说明、
+    反引号包裹、前后缀文字）一律不命中——与 _marker_line_index 同源判定。
+    """
+    found: list[tuple[int, str, str]] = []
+    for i, raw in enumerate(content.splitlines()):
+        s = raw.strip()
+        if s in APPROVED_MARKS:
+            found.append((i, "APPROVED", ""))
+            continue
+        m = _APPROVED_BOUND_RE.match(s)
+        if m:
+            found.append((i, "APPROVED", m.group(1)))
+            continue
+        if s in REWORK_MARKS:
+            found.append((i, "REWORK", ""))
+            continue
+        m = _REWORK_BOUND_RE.match(s)
+        if m:
+            found.append((i, "REWORK", m.group(1)))
+    return found
+
+
+def _replace_line(content: str, line_idx: int, replacement: str) -> str:
+    """把指定行整行替换为 replacement（B7 修复：行级精确消费核心）。
+
+    旧的 str.replace(mark, ..., 1) 会命中模板说明行里的标记子串，真标记行
+    未被消费 → 一次人工批准连放两个阶段（第二轮审查 B7）。此处只动
+    "整行恰为标记"的那一行，模板说明行里的子串不受影响。
+    """
+    lines = content.splitlines()
+    if not (0 <= line_idx < len(lines)):
+        return content
+    lines[line_idx] = replacement
+    out = "\n".join(lines)
+    return out + "\n" if content.endswith("\n") else out
 
 
 def _sanitize(text: str) -> str:
@@ -212,7 +272,9 @@ def _write_intervention_template(mode: str) -> None:
         f"> **说明**: 在各阶段 AI 停下来等待时，在此文件填写审查结果。\n\n"
         f"## 审查结果区\n\n"
         f"_(AI 停下来时，把下面占位行改成 【APPROVED】（同意）或 【REWORK】（返工，"
-        f"意见写在标记行的下一行起）。标记必须独占一行，行内不得有其它字符。)_\n"
+        f"意见写在标记行的下一行起）。标记必须独占一行，行内不得有其它字符；"
+        f"多阶段同时在审时用指定形态 【APPROVED 阶段ID】（如 【APPROVED S5_evidence_gate】，"
+        f"前缀记号 【APPROVED S5】 亦可）。)_\n"
         f"\n【待填写：APPROVED 或 REWORK】\n"
         f"{manual_spec}",
         encoding="utf-8",
@@ -307,7 +369,7 @@ def cmd_request_review(args: argparse.Namespace) -> None:
 
 请阅读上述报告，然后在 `paper_output/state/human_intervention.md` 中填写：
 
-- 同意继续 → 单独一行写 【APPROVED】
+- 同意继续 → 单独一行写 【APPROVED】（多阶段同时在审时用指定形态 【APPROVED {stage}】）
 - 需要修改 → 单独一行写 【REWORK】，并在下一行起写明具体修改意见
 
 填写完毕后，在终端输入「**继续**」并按 Enter 唤醒 AI。
@@ -325,36 +387,62 @@ def cmd_request_review(args: argparse.Namespace) -> None:
 
 
 def cmd_check_approval(args: argparse.Namespace) -> str:
-    """行级精确匹配（CR-6）：必须存在单独一行恰为 [APPROVED] 或 【APPROVED】
-    才算批准；反引号包裹的说明文字、行内混排一律不算（防止模板天然放行）。"""
-    verdict, _ = _approval_state()
-    if verdict != "REWORK":
-        print(verdict)
+    """行级精确匹配（CR-6）+ 阶段绑定（第二轮审查 B-①）：
+    必须存在单独一行恰为 [APPROVED]/【APPROVED】（或指定形态
+    [APPROVED <stage>]/【APPROVED <stage>】）才算批准；行内混排一律不算。
+    --stage 指定阶段时，绑定其它阶段的标记对本阶段不生效。"""
+    stage = (args.stage or "").strip()
+    verdict, detail, bound, _ = _approval_state(stage)
+    print(verdict)
+    if bound:
+        print(f"(标记绑定阶段记号: {bound})")
+    if detail:
+        print(detail)
     return verdict
 
 
-def _approval_state() -> tuple:
+def _approval_state(stage: str = "") -> tuple[str, str, str, int]:
     """读取 HUMAN_FILE 判定审批状态（检测器与消费端共用同一解析器）。
-    返回 (verdict, feedback)，verdict ∈ {APPROVED, REWORK, PENDING}。"""
+
+    返回 (verdict, detail, bound, line_idx)：
+      - verdict ∈ {APPROVED, REWORK, PENDING}
+      - detail：REWORK 时为标记行下一行起的修改意见；PENDING 时为原因说明
+      - bound：生效标记的绑定记号（""=全局形态）
+      - line_idx：生效标记行号（-1=无标记），advance 据此做行级精确消费
+
+    规则（CR-6 + 第二轮审查 B）：
+      - 标记必须独占一行；支持全局 [APPROVED] 与指定 [APPROVED <stage>] 两种形态
+      - stage 非空时只统计与该阶段相关的标记（全局形态 + 记号匹配该阶段）；
+        绑定其它阶段的标记对本阶段不生效
+      - 最后写入优先：APPROVED 与 REWORK 并存时，文件中位置靠后的标记生效
+    """
     if not HUMAN_FILE.exists():
-        return "PENDING", ""
+        return "PENDING", "（human_intervention.md 不存在）", "", -1
     content = HUMAN_FILE.read_text(encoding="utf-8")
-    if _marker_line_index(content, APPROVED_MARKS) >= 0:
-        return "APPROVED", ""
-    idx = _marker_line_index(content, REWORK_MARKS)
-    if idx >= 0:
-        lines = content.splitlines()
-        feedback = "\n".join(lines[idx + 1:]).strip()
-        print(f"REWORK\n{feedback}")
-        return "REWORK", feedback
-    return "PENDING", ""
+    markers = _scan_marker_lines(content)
+    if not markers:
+        return "PENDING", "（未检测到任何独占一行的审批标记）", "", -1
+    if stage:
+        relevant = [m for m in markers if not m[2] or _token_matches_stage(m[2], stage)]
+    else:
+        relevant = markers
+    if not relevant:
+        others = "、".join(f"{kind}@{tok or '全局'}" for _, kind, tok in markers)
+        return "PENDING", f"现有标记均绑定其它阶段（{others}），与 {stage} 无关", "", -1
+    line_idx, kind, bound = relevant[-1]  # 行号升序 → 最后一个即文件中最靠后者
+    if kind == "APPROVED":
+        return "APPROVED", "", bound, line_idx
+    feedback = "\n".join(content.splitlines()[line_idx + 1:]).strip()
+    return "REWORK", feedback, bound, line_idx
 
 
 def _print_approval_guidance(reason: str) -> None:
     print(
         f"[pipeline] ✗ advance 被拒绝：{reason}\n"
         f"  请在 paper_output/state/human_intervention.md 的「审查结果区」单独一行填写：\n"
-        f"      【APPROVED】\n"
+        f"      【APPROVED】                  （仅一个阶段在审时的全局形态）\n"
+        f"      【APPROVED <阶段ID>】         （多阶段同时在审时的指定形态，\n"
+        f"                                     如 【APPROVED S5_evidence_gate】 或其前缀记号 【APPROVED S5】）\n"
         f"  （标记必须独占一行，行内不得含反引号或其它字符；需要修改则单独一行写 【REWORK】，"
         f"   并在下一行起写修改意见）\n"
         f"  然后重新运行: pipeline_manager.py advance <stage>",
@@ -363,19 +451,45 @@ def _print_approval_guidance(reason: str) -> None:
 
 
 def cmd_advance(args: argparse.Namespace) -> None:
-    # CR-6 修复：advance 不再是绕过审批的旁门——推进前必须先通过行级审批检查
-    verdict, _ = _approval_state()
-    if verdict != "APPROVED":
-        reason = {
-            "REWORK": "审查结论为 REWORK（请先按修改意见返工，再重新提交审查）",
-            "PENDING": "未检测到人工批准标记",
-        }.get(verdict, verdict)
-        _print_approval_guidance(reason)
-        sys.exit(1)
+    # CR-6：advance 不是绕过审批的旁门；第二轮审查 B：令牌绑定 + 乱序跳级封死
     state = load()
     stage = args.stage
     if stage not in state["stages"]:
         sys.exit(f"[pipeline] 未知阶段: {stage}")
+
+    # 乱序跳级封死：审批令牌只对"已提交审查"（pending_review）的阶段生效
+    cur_status = state["stages"][stage].get("status")
+    if cur_status != "pending_review":
+        print(
+            f"[pipeline] ✗ advance 被拒绝：{stage} 当前状态为 '{cur_status}'（非 pending_review）。\n"
+            f"  审批令牌与阶段绑定，不能跨阶段/跨状态套用——请先提交审查：\n"
+            f"      pipeline_manager.py request-review --stage {stage} --summary \"...\"",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    verdict, detail, bound, line_idx = _approval_state(stage)
+    if verdict != "APPROVED":
+        reason = {
+            "REWORK": f"审查结论为 REWORK（请先按修改意见返工，再重新提交审查）\n{detail}",
+            "PENDING": detail or "未检测到人工批准标记",
+        }.get(verdict, verdict)
+        _print_approval_guidance(reason)
+        sys.exit(1)
+
+    # 多阶段同时 pending_review 时，全局标记无法定位批准对象 → 必须用指定形态
+    pending = [s for s, info in state["stages"].items()
+               if isinstance(info, dict) and info.get("status") == "pending_review"]
+    if not bound and len(pending) > 1:
+        print(
+            f"[pipeline] ✗ advance 被拒绝：当前有 {len(pending)} 个阶段同时 pending_review"
+            f"（{'、'.join(pending)}），全局 【APPROVED】 无法定位批准对象。\n"
+            f"  请改用指定形态（单独一行）：\n"
+            f"      【APPROVED {stage}】",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     state["stages"][stage]["status"] = "approved"
     state["stages"][stage]["approved_at"] = now()
     state["blocked_at"] = None
@@ -396,15 +510,13 @@ def cmd_advance(args: argparse.Namespace) -> None:
             print("[pipeline] 🏁 流水线全部完成！")
     save(state)
 
-    # 清除 APPROVED 标记（count=1 保留历史；CR-6：半角/全角标记行均消费为
-    # "[APPROVED — stage @ time]"，该行不再恰好等于任何 APPROVED 标记，不会二次放行）
-    if HUMAN_FILE.exists():
+    # B7 修复：行级精确消费——把"生效标记行"整行改写为带时间戳的消费记录。
+    # 旧 str.replace(mark, ..., 1) 会命中模板说明行里的标记子串，真标记行
+    # 未被消费 → 一次批准连放两个阶段。改写后的行不再等于任何标记，不会二次放行。
+    if HUMAN_FILE.exists() and line_idx >= 0:
         content = HUMAN_FILE.read_text(encoding="utf-8")
-        for mark in APPROVED_MARKS:
-            if _marker_line_index(content, (mark,)) >= 0:
-                content = content.replace(mark, f"[APPROVED — {stage} @ {now()}]", 1)
-                break
-        HUMAN_FILE.write_text(content, encoding="utf-8")
+        consumed = _replace_line(content, line_idx, f"[APPROVED — {stage} @ {now()}]")
+        HUMAN_FILE.write_text(consumed, encoding="utf-8")
 
 
 def cmd_rework(args: argparse.Namespace) -> None:
@@ -438,14 +550,15 @@ def cmd_rework(args: argparse.Namespace) -> None:
     print("[pipeline] 请阅读 human_intervention.md 中的修改意见后开始 Rework")
 
     if HUMAN_FILE.exists():
-        # CR-6 补充：与 advance 同口径——半角/全角 REWORK 标记行均消费为
-        # "[REWORK — stage @ time]"，消费后不再等于任何 REWORK 标记
-        content = HUMAN_FILE.read_text(encoding="utf-8")
-        for mark in REWORK_MARKS:
-            if _marker_line_index(content, (mark,)) >= 0:
-                content = content.replace(mark, f"[REWORK — {stage} @ {now()}]", 1)
-                break
-        HUMAN_FILE.write_text(content, encoding="utf-8")
+        # B7 同源修复：与 advance 同口径——只把"生效 REWORK 标记行"整行消费为
+        # "[REWORK — stage @ time]"，绝不 str.replace（会命中模板说明行子串）
+        verdict, _, _, line_idx = _approval_state(stage)
+        if verdict == "REWORK" and line_idx >= 0:
+            content = HUMAN_FILE.read_text(encoding="utf-8")
+            HUMAN_FILE.write_text(
+                _replace_line(content, line_idx, f"[REWORK — {stage} @ {now()}]"),
+                encoding="utf-8",
+            )
 
 
 def cmd_checkpoint_banner(args: argparse.Namespace) -> None:

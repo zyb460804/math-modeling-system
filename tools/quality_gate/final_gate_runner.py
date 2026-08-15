@@ -7,9 +7,13 @@
   1. G4.7 实物门      paper_artifact_check.py    论文表格实体/图片/占位符、result*.xlsx 非空、代码存在
   2. G4.6 代码自证门  verify_gate.py             模型必须配 verify_*.py 且全部 PASS（缺失即 FAIL）
   3. G5  证据门        evidence_gate.py          结果/指标/结论/图表证据齐备（official 模式）
-  4. G4.8 数字一致性  generic_number_check       论文数字在结果文件中有来源（warning 级，人工复核）
+  4. G4.8 数字一致性  generic_number_check       论文数字在结果文件中有来源（只取 w:t 可见文本；
+                                   无来源去重比例>30% 升级 FAIL，清单保留供人工复核）
   5. G4.9 公式核验门  formula_verification.md    真题必须做官方参考答案公式核验并落盘
   6. G4.10 图片嵌入门  image_embed_check.py      Markdown ![](path) 语法数 vs Word 实际内嵌图数（防"见图N"纯文字漏检）
+  7. G5 skill 调用门  skill_invocation_gate.py   必调 skill 产物核验（rc=2 WARN 不阻断）
+  8. G5 盲评证据门    blind_panel_report.json    championship（v4.9 默认）盲评证据（与 pipeline_runner
+                                   S8 同口径：缺文件/占位/座数不足/无 verdict → FAIL）
 
 背景：2026-08 实测 B 题作品出现"空 result xlsx / 0 表格 docx / 编造公式 / 摘要正文数字矛盾"，
 根因是作品放桌面导致硬编码 paper_output/ 的门禁全部落空。本 runner 支持 --paper-dir 指向任意目录。
@@ -41,6 +45,10 @@ for stream in (sys.stdout, sys.stderr):
         pass
 
 NUM_RE = re.compile(r"\d+(?:\.\d+)?")
+# G4.8 无来源数字比例阈值（去重口径）：超过即从"人工复核 warning"升级为 FAIL
+MISSING_RATIO_FAIL = 0.30
+# docx 可见文本节点：<w:t>…</w:t>（含带属性形式如 <w:t xml:space="preserve">）
+WT_TEXT_RE = re.compile(r"<w:t(?:\s[^>]*)?>(.*?)</w:t>", re.DOTALL)
 
 
 def run(cmd: list[str], cwd: Path, timeout: int = 300) -> dict:
@@ -52,26 +60,41 @@ def run(cmd: list[str], cwd: Path, timeout: int = 300) -> dict:
         return {"cmd": " ".join(str(c) for c in cmd), "rc": -1, "out": "", "err": str(exc)}
 
 
+def docx_visible_text(docx_path: Path) -> str:
+    """提取 docx 可见文本：只取 word/document.xml 的 <w:t> 文本节点内容。
+
+    二轮审查（2026-08-15）：直接对 document.xml 原文跑数字正则会把 w:sz="24"、
+    w:rsidR="00AB12CD" 等 XML 属性值当成论文数字——真实树 49 个"无来源"大半是
+    这类属性噪音。只取 w:t 后，数字集合 = 读者在 Word 里真正看到的数字。
+    """
+    import zipfile
+    from xml.sax.saxutils import unescape
+    with zipfile.ZipFile(docx_path) as z:
+        xml = z.read("word/document.xml").decode("utf-8", errors="replace")
+    return "\n".join(unescape(m.group(1)) for m in WT_TEXT_RE.finditer(xml))
+
+
 def generic_number_check(paper_dir: Path) -> tuple[list[str], list[str]]:
     """论文正文数字 vs 结果文件数字集合：论文出现但结果文件里找不到的数字列为 warning。
 
     容差：结果集合含数值时，论文数字需在 [v*(1-tol), v*(1+tol)] 内命中。
     结果文件：<paper-dir>/results/*.json/*.csv（或 --results 指定）。
+    升级口径（二轮审查 G4.8 双修②）：无来源数字的去重比例超过 MISSING_RATIO_FAIL（30%）
+    时记 FAIL_P0——超三成正文数字无法溯源，疑似成段编造/占位，不得放行；
+    阈值内仍为 warning，无来源清单保留供人工复核。
     """
     warnings: list[str] = []
     info: list[str] = []
     docx_files = list(paper_dir.rglob("*.docx"))
     if not docx_files:
         return info, ["未找到 docx，跳过数字一致性"]
-    # 提取论文数字（只取≥2位整数或小数，降低噪音）
+    # 提取论文数字（只取≥2位整数或小数，降低噪音；仅 w:t 可见文本，见 docx_visible_text）
     text = ""
     for d in docx_files:
         if "backup" in d.name.lower() or "~$" in d.name:
             continue
         try:
-            import zipfile
-            with zipfile.ZipFile(d) as z:
-                text += z.read("word/document.xml").decode("utf-8", errors="replace")
+            text += "\n" + docx_visible_text(d)
         except Exception:
             continue
     paper_nums = [float(x) for x in NUM_RE.findall(text) if len(x) >= 2]
@@ -87,14 +110,27 @@ def generic_number_check(paper_dir: Path) -> tuple[list[str], list[str]]:
     if not result_nums:
         return info, ["FAIL_P0: 未找到结果数字文件（results/*.json|*.csv），论文数字无法客观核对来源"]
     tol = 0.05
-    missing: list[float] = []
-    for v in paper_nums:
-        if not any(abs(v - r) <= max(tol * abs(r), 0.5) for r in result_nums):
-            missing.append(v)
-    info.append(f"论文数字 {len(paper_nums)} 个，结果文件数字 {len(result_nums)} 个，无来源候选 {len(missing)} 个")
-    if missing:
-        top = ", ".join(f"{x:g}" for x in sorted(set(missing))[:20])
+
+    def has_source(v: float) -> bool:
+        return any(abs(v - r) <= max(tol * abs(r), 0.5) for r in result_nums)
+
+    missing = [v for v in paper_nums if not has_source(v)]
+    uniq_missing = sorted(set(missing))
+    uniq_total = len(set(paper_nums))
+    ratio = (len(uniq_missing) / uniq_total) if uniq_total else 0.0
+    info.append(
+        f"论文数字 {len(paper_nums)} 个（去重 {uniq_total}，仅 w:t 可见文本），"
+        f"结果文件数字 {len(result_nums)} 个，无来源 {len(missing)} 个"
+        f"（去重 {len(uniq_missing)}，比例 {ratio:.1%}，FAIL 阈值 {MISSING_RATIO_FAIL:.0%}）"
+    )
+    if uniq_missing:
+        top = ", ".join(f"{x:g}" for x in uniq_missing[:20])
         warnings.append(f"论文中以下数字在结果文件中无来源（需人工复核是否编造/占位）: {top}")
+    if uniq_total and ratio > MISSING_RATIO_FAIL:
+        warnings.append(
+            f"FAIL_P0: 无来源数字比例 {ratio:.1%} 超过阈值 {MISSING_RATIO_FAIL:.0%}（去重口径）——"
+            "超三成正文数字无法溯源到 results/，疑似成段编造/占位，不得放行（清单见上一条 warning）"
+        )
     return info, warnings
 
 
@@ -122,11 +158,51 @@ def check_formula_verification(workdir: Path, paper_dir: Path) -> tuple[list[str
     return failures, info
 
 
+def check_blind_panel_championship(paper_dir: Path) -> tuple[list[str], list[str]]:
+    """championship 盲评证据门：与 pipeline_runner S8 championship_evidence 同一语义。
+
+    两链一致化（二轮审查 MEDIUM）：此前 pipeline_runner S8 缺 blind_panel_report.json
+    → 阶段不得 approved（阻断），而 final_gate_runner 只有 skill 调用门的 WARN
+    （rc=2 不阻断）——同一缺口两条终检链口径不一，标准模式下会从 runner 链漏过。
+    现统一为：缺文件/疑似占位/JSON 不合规/座数不足 3/无 verdict → FAIL 并给做法指引。
+    合法跳过途径：显式 --skip-blind-panel（对应 orchestrator escape hatch 降级 standard/fast）。
+    schema 依据 .claude/skills/blind-panel/SKILL.md：seats {"A":..,"B":..,"C":..} + verdict。
+    """
+    failures: list[str] = []
+    info: list[str] = []
+    report = paper_dir / "qa" / "blind_panel_report.json"
+    how = ("调 blind-panel skill：3 座并行盲评 → Lead 聚合写 paper_output/qa/blind_panel_report.json"
+           "（schema: seats A/B/C + verdict，见 .claude/skills/blind-panel/SKILL.md）")
+    if not report.exists():
+        failures.append(f"championship（v4.9 默认模式）缺盲评证据 qa/blind_panel_report.json —— {how}")
+        return failures, info
+    size = report.stat().st_size
+    if size < 10:
+        failures.append(f"qa/blind_panel_report.json 仅 {size} 字节（疑似占位）—— {how}")
+        return failures, info
+    try:
+        data = json.loads(report.read_text(encoding="utf-8"))
+    except Exception as exc:
+        failures.append(f"qa/blind_panel_report.json JSON 不可解析（{exc}）—— {how}")
+        return failures, info
+    seats = data.get("seats") if isinstance(data, dict) else None
+    if not isinstance(seats, dict) or len(seats) < 3:
+        n_seats = len(seats) if isinstance(seats, dict) else 0
+        failures.append(f"blind_panel_report.json 缺 seats（不足 3 座，实际 {n_seats}）——不符合 blind-panel 聚合 schema；{how}")
+    elif "verdict" not in data:
+        failures.append("blind_panel_report.json 缺 verdict 字段——不符合 blind-panel 聚合 schema（verdict ∈ pass|refine|block）")
+    else:
+        info.append(f"盲评聚合报告在案: seats={sorted(seats)}, verdict={data.get('verdict')}")
+    return failures, info
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="一键终检总门（实物+自证+证据+数字+公式）")
     ap.add_argument("--paper-dir", default="paper_output", help="作品目录（任意位置）")
     ap.add_argument("--workdir", default=".", help="系统门禁脚本运行目录（含 .claude/skills 与 paper_output）")
     ap.add_argument("--skip-evidence", action="store_true", help="跳过证据门（无 model_route.json 时可加）")
+    ap.add_argument("--skip-blind-panel", action="store_true",
+                    help="跳过 championship 盲评证据门（仅对应 orchestrator escape hatch 显式降级 standard/fast 时合法）")
     args = ap.parse_args()
 
     paper_dir = Path(args.paper_dir).resolve()  # H-11：先 resolve，rglob/子进程全部走绝对路径
@@ -157,7 +233,12 @@ def main() -> int:
         if "qa" in rel_parts or "quality_gate" in rel_parts or "__pycache__" in rel_parts:
             continue
         code_files.append(f)
-    verify_files = [f for f in paper_dir.rglob("verify_*.py") if f.is_file()]
+    # 与 code_files 同一排除规则：qa/quality_gate/__pycache__ 下的 verify_*.py 是工具或
+    # 测试残留（如对抗性测试临时目录），不得被当作作品自证脚本执行或参与对应关系校验
+    verify_files = [
+        f for f in paper_dir.rglob("verify_*.py")
+        if f.is_file() and not ({"qa", "quality_gate", "__pycache__"} & set(f.relative_to(paper_dir).parts))
+    ]
     modeling_dir = paper_dir / "code" / "modeling"
     models = (sorted(m for m in modeling_dir.glob("*.py") if not m.name.startswith("_"))
               if modeling_dir.exists() else [])
@@ -235,6 +316,11 @@ def main() -> int:
         # CR-2：检查器缺失 = FAIL（原为 pass=True"未找到，跳过"的无痕放行）
         steps.append({"gate": "G5_SKILL_INVOCATION_GATE", "cmd": "N/A", "rc": 1, "pass": False,
                       "out_tail": "skill_invocation_gate.py 未找到（fail-closed）——检查器缺失=FAIL", "err_tail": ""})
+    # 8) championship 盲评证据门（v4.10）：与 pipeline_runner S8 相同 rc 语义（缺证据=FAIL）
+    if not args.skip_blind_panel:
+        bp_fail, bp_info = check_blind_panel_championship(paper_dir)
+        steps.append({"gate": "G5_BLIND_PANEL_CHAMPIONSHIP", "cmd": "file-check", "rc": 1 if bp_fail else 0,
+                      "pass": not bp_fail, "out_tail": "\n".join(bp_info + bp_fail), "err_tail": ""})
 
     # 汇总
     failed = [s for s in steps if not s["pass"]]

@@ -7,6 +7,16 @@
   - 认知型环节（审题/写作/盲评）：输出 AGENT_HANDOFF 指令，交 Agent 接力
   - 状态推进：复用 pipeline_manager.py 的 pipeline.json（GitOps 状态机）
 
+v4.9.2（第二轮审查修复，B7/C/D/E/F 对应 runner 侧）：
+  - championship verdict 真消费：verdict 必须命中 blind-panel SKILL.md 枚举
+    pass|refine|block 且 = pass 才放行；每座 weighted_total 必须为数值；
+    aggregate.evidence_conflicts 非空 → 拒绝（12 字节矛盾 JSON 不再放行）
+  - classify 兜底：rc=0 但报告 status=FAIL/FAILED/ERROR → FAIL（以磁盘报告为准）；
+    未知 status 词 → 至少 WARN，绝不当 PASS；PASS_WITH_SKIP 归 SKIP 侧
+  - S3b verify_gate 接 report 键（qa/verify_gate_report.json）：空项目
+    status=SKIP 时 runner 正确显示 ⏭️ 而非 PASS
+  - 数字门禁 0 匹配（check_number_consistency 改 SKIP 后）本侧无需改动即可显示 ⏭️
+
 v4.9.1（CR-5 / G-05 / G-07 修复）：
   - check_produces 强化：目录型 produce 必须非空；JSON 型 produce 必须 ≥10 字节且
     json.loads 可解析（坏 JSON = 未完成）
@@ -60,13 +70,25 @@ TOOLS_QG = WORK_DIR / "tools" / "quality_gate"
 QA_SCRIPTS = SKILLS_DIR / "quality-assurance-auditor" / "scripts"
 PY = sys.executable
 
-# ── 三态分类词汇（CR-5）──
+# ── 三态分类词汇（CR-5 + 第二轮审查 D/MEDIUM 兜底）──
 # 子脚本 rc=0 时：stdout 出现以 skip/[skip] 开头的行，或报告 JSON status 命中 SKIP 词表 → SKIP
-SKIP_STATUSES = {"SKIP", "SKIPPED"}
+# PASS_WITH_SKIP（如 render_check 部分检查项跳过）归入 SKIP 侧一致处理：含跳过 ≠ 纯通过
+SKIP_STATUSES = {"SKIP", "SKIPPED", "PASS_WITH_SKIP"}
 # 报告 JSON status 命中 WARN 词表（rc=0）→ WARN（可见但不阻断）
 WARN_STATUSES = {"WARN", "WARNING", "DEGRADED", "STALE"}
+# 报告 JSON status 明示失败而子脚本 rc 却=0 → 以磁盘报告为准 FAIL（fail-closed）
+FAIL_STATUSES = {"FAIL", "FAILED", "ERROR"}
+# 报告 JSON status 显式通过词表；不在任何已知名单的未知词一律 WARN 兜底，绝不当 PASS
+PASS_STATUSES = {"PASS", "PASSED", "OK", "SUCCESS"}
 # 状态机里"已越过"的状态：approved=真通过；skipped=带 SKIP 推进（≠通过）
 ADVANCED_STATUSES = {"approved", "skipped"}
+
+# blind-panel 聚合报告 verdict 枚举（第二轮审查 HIGH-2）
+# 来源：.claude/skills/blind-panel/SKILL.md 聚合 schema——
+#   "verdict": "refine",      # pass | refine | block
+# 只有 pass 是放行枚举；refine/block 须先按 bottleneck/fix_one_thing 修改后重评
+BLIND_PANEL_VERDICTS = {"pass", "refine", "block"}
+BLIND_PANEL_PASS_VERDICTS = {"pass"}
 
 
 # ── 阶段定义（对齐 pipeline_manager.py STAGE_ORDER）──
@@ -123,7 +145,11 @@ STAGES: list[dict] = [
         "name": "代码自证门（G4.6）",
         "type": "script",
         "scripts": [
-            {"cmd": [PY, str(QA_SCRIPTS / "verify_gate.py")], "label": "G4.6 verify_gate（每模型 verify_*.py 全 PASS）"},
+            # report 接线（第二轮审查 F）：verify_gate 空项目写 status=SKIP 的报告
+            # （qa/verify_gate_report.json），runner 侧 SKIP_STATUSES 直接接住显示 ⏭️，
+            # 不再"跳过显示成 PASS"
+            {"cmd": [PY, str(QA_SCRIPTS / "verify_gate.py")], "label": "G4.6 verify_gate（每模型 verify_*.py 全 PASS）",
+             "report": "qa/verify_gate_report.json"},
         ],
     },
     {
@@ -327,6 +353,11 @@ def classify_script_result(rc: int, stdout: str, script: dict) -> tuple[str, str
       - check_parameter_consistency / check_result_reasonableness 在缺配置时
         stdout 打印 "SKIP：<原因>" 且 rc=0，报告 JSON status="SKIP"
       - check_numeric_sanity 在结果目录缺失时 stdout 打印 "[skip] ..." 且 rc=0
+      - PASS_WITH_SKIP（render_check 部分检查项跳过）归 SKIP 侧，绝不显示成纯 PASS
+
+    第二轮审查 D 兜底：rc=0 不再无条件当 PASS——
+      - 报告 status 命中 FAIL 词表 → FAIL（子脚本 rc 与磁盘报告矛盾时，以报告为准）
+      - 报告 status 是未知词（不在 SKIP/WARN/FAIL/PASS 任一名单）→ 至少 WARN
     """
     if rc != 0:
         return "FAIL", ""
@@ -339,7 +370,11 @@ def classify_script_result(rc: int, stdout: str, script: dict) -> tuple[str, str
         return "SKIP", f"报告 status={status}"
     if status in WARN_STATUSES:
         return "WARN", f"报告 status={status}"
-    return "PASS", ""
+    if status in FAIL_STATUSES:
+        return "FAIL", f"报告 status={status}（子脚本 rc=0 但报告明示失败，以磁盘报告为准）"
+    if status is None or status in PASS_STATUSES:
+        return "PASS", ""
+    return "WARN", f"报告 status={status} 不在已知名单（SKIP/WARN/FAIL/PASS），按 WARN 兜底"
 
 
 # ── championship 证据检查（存在性检查，非脚本强制）──
@@ -361,19 +396,43 @@ def championship_missing_evidence(stage: dict) -> list[tuple[dict, str]]:
             except Exception as exc:
                 missing.append((ev, f"JSON 不可解析：{exc}"))
                 continue
-            # blind-panel skill 定义的聚合 schema：seats（≥3 座）+ verdict
-            seats = data.get("seats") if isinstance(data, dict) else None
+            if not isinstance(data, dict):
+                missing.append((ev, "JSON 顶层不是对象——不符合 blind-panel 聚合 schema"))
+                continue
+            # verdict 真消费（第二轮审查 HIGH-2）：旧版只查"键存在"，
+            # 12 字节矛盾 JSON（三座互异+verdict=block）照样过；现在必须命中放行枚举
+            verdict = str(data.get("verdict", "")).strip().lower()
+            if verdict not in BLIND_PANEL_VERDICTS:
+                missing.append((ev, f"verdict={data.get('verdict')!r} 不在枚举 pass|refine|block 内"
+                                   f"（见 .claude/skills/blind-panel/SKILL.md 聚合 schema）"))
+            elif verdict not in BLIND_PANEL_PASS_VERDICTS:
+                missing.append((ev, f"盲评 verdict='{verdict}'（≠pass）——按 SKILL.md 须先按 bottleneck/"
+                                   f"fix_one_thing 修改后重评，未解决的 refine/block 不得推进"))
+            # seats：≥3 座且每座必须有数值 weighted_total（scorecard 核心字段）
+            seats = data.get("seats")
             if not isinstance(seats, dict) or len(seats) < 3:
                 missing.append((ev, "JSON 缺 seats（不足 3 座）——不符合 blind-panel 聚合 schema"))
-            elif "verdict" not in data:
-                missing.append((ev, "JSON 缺 verdict 字段——不符合 blind-panel 聚合 schema"))
+            else:
+                bad = [f"{sid}: weighted_total 非数值"
+                       for sid, seat in seats.items()
+                       if not (isinstance(seat, dict)
+                               and isinstance(seat.get("weighted_total"), (int, float))
+                               and not isinstance(seat.get("weighted_total"), bool))]
+                if bad:
+                    missing.append((ev, "座位加权总分校验失败：" + "; ".join(bad)))
+            # 20 分冲突未仲裁 → 不得 clean pass（SKILL.md 聚合规则）
+            agg = data.get("aggregate")
+            conflicts = agg.get("evidence_conflicts") if isinstance(agg, dict) else None
+            if conflicts:
+                missing.append((ev, f"aggregate.evidence_conflicts 非空（{len(conflicts)} 处 >20 分冲突"
+                                   f"未经 lead 仲裁）——未解决的证据冲突不得放行"))
     return missing
 
 
 def print_championship_handoff(stage: dict, missing: list[tuple[dict, str]]) -> None:
-    print(f"\n❌ [{stage['id']}] championship 证据缺失 — 该阶段不得 approved（v4.9 championship 为默认模式）")
+    print(f"\n❌ [{stage['id']}] championship 证据缺失或不达标 — 该阶段不得 approved（v4.9 championship 为默认模式）")
     for ev, why in missing:
-        print(f"    缺: {ev['file']}（{why}）")
+        print(f"    ✗ {ev['file']}（{why}）")
         print(f"      用途: {ev['item']}")
         print(f"      做法: {ev['how']}")
     only_notes = stage.get("championship_handoff_only", [])

@@ -93,6 +93,10 @@ DETECTORS = {
         "fixer": CORRECTORS_DIR / "figure_auto_fixer.py",
         "description": "图表质量检查",
         "max_rounds": 2,
+        # HIGH-1 修复（二轮审查）：render_check.py 是子命令式 CLI，不带子命令只打印
+        # help 且 rc=0——旧写法使该检测通道恒绿（help 的 rc=0 被当成"检测通过"）。
+        # 必须显式传 check-all 并消费其 rc：check-all 有 failed 图时 rc=1。
+        "args": ["check-all"],
     },
     "latex": {
         "script": CORRECTORS_DIR / "latex_auto_fixer.py",
@@ -180,7 +184,8 @@ def detect_and_fix(stage: str, config: dict) -> bool:
         print(f"\n  --- 第 {round_num}/{max_rounds} 轮 ---")
 
         # 检测（combined 与普通模式在检测阶段行为一致，差异只在下方修复器参数——原 if/else 两分支相同，已合并）
-        passed, output = run_script(config["script"])
+        # 检测器自定义参数（如 figure 的 check-all 子命令）经 config["args"] 透传，缺省无参
+        passed, output = run_script(config["script"], config.get("args"))
 
         if passed:
             print(f"  [OK] 检测通过")

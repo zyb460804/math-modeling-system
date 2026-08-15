@@ -79,18 +79,26 @@ def load_symbol_table() -> dict:
     content = SYMBOL_TABLE.read_text(encoding="utf-8")
     symbols = {}
 
-    # 解析符号表（假设Markdown表格格式）
-    # | 符号 | 含义 | 类型 | 子问题 |
-    pattern = r'\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|'
-    for match in re.finditer(pattern, content):
-        symbol, meaning, sym_type, question = match.groups()
-        symbol = symbol.strip()
-        if symbol and symbol != "符号" and not symbol.startswith("-"):
-            symbols[symbol] = {
-                "meaning": meaning.strip(),
-                "type": sym_type.strip(),
-                "question": question.strip()
-            }
+    # 解析符号表（Markdown 表格行，2~4 列均可：| 符号 | 含义 | [单位] [子问题]）
+    # 旧实现用跨 4 组的整行正则，会把分隔行 |---|---| 当桥接吞进上一行，
+    # 加载出 "°"/"φ"/"m" 这类假符号——改为逐行按 | 切分。
+    for line in content.splitlines():
+        line = line.strip()
+        if not line.startswith("|") or not line.endswith("|"):
+            continue
+        cells = [c.strip() for c in line[1:-1].split("|")]
+        if len(cells) < 2:
+            continue
+        symbol = cells[0]
+        # 跳过表头与分隔行
+        if not symbol or symbol == "符号" or set(symbol) <= {"-", ":", " "}:
+            continue
+        rest = cells[1:] + [""] * (3 - len(cells[1:]))
+        symbols[symbol] = {
+            "meaning": rest[0],
+            "type": rest[1],
+            "question": rest[2],
+        }
     return symbols
 
 
@@ -131,30 +139,46 @@ def extract_numbers_from_paper(text: str) -> list[dict]:
 
 
 def extract_file_references(text: str) -> list[dict]:
-    """从论文中提取文件引用"""
-    references = []
+    """从论文中提取文件引用。
 
-    # 匹配图表引用
-    patterns = [
-        (r'见图\s*(\d+)', "figure"),
-        (r'如图\s*(\d+)', "figure"),
-        (r'图\s*(\d+)', "figure"),
-        (r'见表\s*(\d+)', "table"),
-        (r'如表\s*(\d+)', "table"),
-        (r'表\s*(\d+)', "table"),
-    ]
+    两类：
+    1. 正文交叉引用「图 N / 见图 N / 表 N」——不是磁盘路径，经
+       figure_index.json / tables/table_index.json 核验（见 check_file_references）。
+       按编号去重计数（旧实现对同一处引用按「见图 4」+「图 4」重复计条）。
+    2. 显式文件名引用（xxx.png/csv/xlsx 等）——走磁盘核验。
+    """
+    references: dict = {}
+    order: list = []
 
-    for pattern, ref_type in patterns:
+    def add_ref(key: tuple, ref: dict):
+        if key not in references:
+            ref["count"] = 0
+            references[key] = ref
+            order.append(key)
+        references[key]["count"] += 1
+
+    for ref_type, pattern in (("figure", r'图\s*(\d+)'), ("table", r'表\s*(\d+)')):
         for match in re.finditer(pattern, text):
-            ref_num = match.group(1)
-            references.append({
+            add_ref((ref_type, int(match.group(1))), {
                 "type": ref_type,
-                "number": int(ref_num),
+                "number": int(match.group(1)),
                 "raw": match.group(0),
                 "position": match.start()
             })
 
-    return references
+    for match in re.finditer(
+        r'(?<![\w/])([\w\-./\\]+\.(?:png|jpe?g|svg|gif|pdf|csv|xlsx|json|docx))(?!\w)',
+        text,
+    ):
+        path_str = match.group(1)
+        add_ref(("file", path_str), {
+            "type": "file",
+            "path": path_str,
+            "raw": path_str,
+            "position": match.start()
+        })
+
+    return [references[key] for key in order]
 
 
 def extract_symbols_from_paper(text: str) -> list[dict]:
@@ -173,11 +197,16 @@ def extract_symbols_from_paper(text: str) -> list[dict]:
         for match in re.finditer(pattern, text):
             formula = match.group(1)
 
-            # 提取单字符符号（希腊字母、拉丁字母）
+            # 提取单字符符号（拉丁字母）。
+            # LaTeX 命令词（\sin \cos \tan \le \eta ...）是运算符/命令名，
+            # 不是数学符号——旧实现把 ≤3 字符的命令（sin/cos/tan/le/ge...）
+            # 当独立符号统计（cos 一项就 134 次），全部排除。
             symbol_pattern = r'\\([a-zA-Z]+)|([a-zA-Z])'
             for sym_match in re.finditer(symbol_pattern, formula):
-                symbol = sym_match.group(1) or sym_match.group(2)
-                if symbol and len(symbol) <= 3:  # 过滤掉长命令
+                if sym_match.group(1):
+                    continue  # 反斜杠命令词：跳过
+                symbol = sym_match.group(2)
+                if symbol:
                     symbols.append({
                         "symbol": symbol,
                         "formula": formula,
@@ -187,14 +216,21 @@ def extract_symbols_from_paper(text: str) -> list[dict]:
     return symbols
 
 
+# number_not_frozen 明细上限（计数仍全量，只截展示，避免千条明细撑爆报告）
+NOT_FROZEN_DETAIL_CAP = 50
+# 可核对数字中未锚定占比超过该阈值 → 真正置 WARN（第一轮 H-3：此前该维度结构性不可能 FAIL/WARN）
+NOT_FROZEN_WARN_RATIO = 0.5
+
+
 def check_number_consistency(paper_numbers: list[dict], frozen: dict, tolerance: float) -> dict:
     """检查数字一致性"""
     result = {
         "status": "PASS",
-        "total": len(paper_numbers),
+        "total": 0,
         "matched": 0,
         "mismatched": 0,
         "missing": 0,
+        "not_frozen": 0,
         "details": []
     }
 
@@ -210,14 +246,28 @@ def check_number_consistency(paper_numbers: list[dict], frozen: dict, tolerance:
                     "source": claim.get("source_file", "")
                 }
 
-    # 检查论文中的数字是否有对应的frozen值
+    # 冻结数字完全缺失（如 results/ 扁平布局无 Q*/reports/frozen_numbers.json）：
+    # 论文数字全部无法锚定——按"不可核对"处理，不逐条刷数，置 WARN 提示补冻结
+    if not frozen_values:
+        result["status"] = "WARN"
+        result["details"].append({
+            "type": "frozen_missing",
+            "value": None,
+            "context": "results/ 下未发现任何 Q*/reports/frozen_numbers.json，论文数字无法锚定核对（空白不是 PASS）"
+        })
+        return result
+
+    # 检查论文中的数字是否有对应的frozen值（不再截断 [:50]，全量核对）
     # 注意：不是所有数字都需要在frozen中，只检查关键结果数字
-    for paper_num in paper_numbers[:50]:  # 限制检查数量
+    checked = 0
+    omitted = 0
+    for paper_num in paper_numbers:
         value = paper_num["value"]
 
         # 跳过小数字（可能是编号、页码等）
         if value < 1 or value > 1000000:
             continue
+        checked += 1
 
         # 在frozen中查找匹配
         matched = False
@@ -239,76 +289,168 @@ def check_number_consistency(paper_numbers: list[dict], frozen: dict, tolerance:
 
         if not matched:
             # 可能是新数字或不在frozen中的数字，记录为warning
-            result["details"].append({
-                "type": "number_not_frozen",
-                "value": value,
-                "context": paper_num["context"][:100]
-            })
+            result["not_frozen"] += 1
+            if len(result["details"]) < NOT_FROZEN_DETAIL_CAP:
+                result["details"].append({
+                    "type": "number_not_frozen",
+                    "value": value,
+                    "context": paper_num["context"][:100]
+                })
+            else:
+                omitted += 1
+
+    result["total"] = checked
+    if omitted:
+        result["details_truncated"] = {"omitted": omitted, "cap": NOT_FROZEN_DETAIL_CAP}
+
+    # 状态赋值路径（第一轮 H-3 修复）：超阈值真正降级，不再恒 PASS
+    if result["not_frozen"] and checked and result["not_frozen"] / checked >= NOT_FROZEN_WARN_RATIO:
+        result["status"] = "WARN"
 
     return result
 
 
-def check_file_references(references: list[dict], output_dir: Path) -> dict:
-    """检查文件引用一致性"""
+def load_index_file(*candidates: Path):
+    """按候选路径加载索引 JSON，返回 (命中路径, 数据)；都不在/解析失败返回 (None, None)"""
+    for path in candidates:
+        if not path.exists():
+            continue
+        data = load_json(path)
+        if isinstance(data, dict) and "__error__" not in data:
+            return path, data
+    return None, None
+
+
+def index_numbers(index_data: Any, kind: str) -> set[int]:
+    """从 figure_index/table_index 提取已登记的图/表编号集合。
+
+    兼容 id / figure_id / table_id / number 字段取尾号数字，
+    以及 caption/title 里的「图 N」「表 N」。
+    """
+    label = "图" if kind == "figure" else "表"
+    id_keys = ("number", f"{kind}_id", "id")
+    numbers: set[int] = set()
+    entries = []
+    if isinstance(index_data, dict):
+        entries = index_data.get(f"{kind}s", [])
+        if not isinstance(entries, list):
+            entries = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        for key in id_keys:
+            raw = item.get(key)
+            if raw is None:
+                continue
+            m = re.search(r'(\d+)', str(raw))
+            if m:
+                numbers.add(int(m.group(1)))
+        for key in ("caption", "title", "name"):
+            raw = item.get(key)
+            if isinstance(raw, str):
+                for m in re.finditer(rf'{label}\s*(\d+)', raw):
+                    numbers.add(int(m.group(1)))
+    return numbers
+
+
+def check_file_references(references: list[dict], output_dir: Path, base_dir: Path) -> dict:
+    """检查文件引用一致性。
+
+    「图 N」「表 N」是正文交叉引用而非磁盘路径：
+    经 figure_index.json / tables/table_index.json 核验——索引中有对应编号条目即通过；
+    索引缺失/缺项时回退磁盘文件名核验。显式文件名引用（xxx.png 等）才直接走磁盘。
+    旧实现把交叉引用当文件名 glob，合法论文全数误判 missing。
+    """
     result = {
         "status": "PASS",
         "total": len(references),
         "found": 0,
         "missing": 0,
+        "verified_via": {"index": 0, "disk": 0},
         "details": []
     }
+
+    figure_index_path, figure_index = load_index_file(
+        output_dir / "figure_index.json",
+        output_dir / "figures" / "figure_index.json",
+    )
+    table_index_path, table_index = load_index_file(
+        output_dir / "tables" / "table_index.json",
+        output_dir / "table_index.json",
+    )
+    figure_numbers = index_numbers(figure_index, "figure")
+    table_numbers = index_numbers(table_index, "table")
 
     figures_dir = output_dir / "figures"
     tables_dir = output_dir / "tables"
 
     for ref in references:
         ref_type = ref["type"]
-        ref_num = ref["number"]
-
-        # 检查文件是否存在
         found = False
-        if ref_type == "figure":
-            # 搜索可能的文件名模式
-            patterns = [
-                f"figure_{ref_num}.*",
-                f"fig_{ref_num}.*",
-                f"fig{ref_num}.*",
-                f"图{ref_num}.*",
-            ]
-            for pattern in patterns:
-                if figures_dir.exists():
-                    matches = list(figures_dir.glob(pattern))
-                    if matches:
+        via = None
+
+        if ref_type in ("figure", "table"):
+            ref_num = ref["number"]
+            index_set = figure_numbers if ref_type == "figure" else table_numbers
+            if ref_num in index_set:
+                found = True
+                via = "index"
+            else:
+                # 索引缺项时回退：磁盘文件名模式核验
+                target_dir = figures_dir if ref_type == "figure" else tables_dir
+                if ref_type == "figure":
+                    patterns = [f"figure_{ref_num}.*", f"fig_{ref_num}.*", f"fig{ref_num}.*", f"图{ref_num}.*"]
+                else:
+                    patterns = [f"table_{ref_num}.*", f"tab_{ref_num}.*", f"tab{ref_num}.*", f"表{ref_num}.*"]
+                for pattern in patterns:
+                    if target_dir.exists() and list(target_dir.glob(pattern)):
                         found = True
+                        via = "disk"
                         break
-        elif ref_type == "table":
-            patterns = [
-                f"table_{ref_num}.*",
-                f"tab_{ref_num}.*",
-                f"tab{ref_num}.*",
-                f"表{ref_num}.*",
-            ]
-            for pattern in patterns:
-                if tables_dir.exists():
-                    matches = list(tables_dir.glob(pattern))
-                    if matches:
-                        found = True
-                        break
+        elif ref_type == "file":
+            # 显式文件名：先按原样相对 base/output 解析，再按文件名在 paper_output 下搜
+            raw = ref["path"]
+            name = Path(raw).name
+            for root in (base_dir, output_dir):
+                if (root / raw).exists():
+                    found = True
+                    via = "disk"
+                    break
+            if not found and output_dir.exists():
+                for hit in output_dir.rglob(name):
+                    found = True
+                    via = "disk"
+                    break
 
         if found:
             result["found"] += 1
+            result["verified_via"][via or "disk"] += 1
         else:
             result["missing"] += 1
+            if ref_type == "figure":
+                expected = rel_or_str(figure_index_path or output_dir / "figure_index.json", base_dir)
+            elif ref_type == "table":
+                expected = rel_or_str(table_index_path or output_dir / "tables" / "table_index.json", base_dir)
+            else:
+                expected = "paper_output/ 下任意位置"
             result["details"].append({
                 "type": "file_missing",
                 "reference": ref["raw"],
-                "expected_location": f"figures/ 或 tables/"
+                "expected_location": expected
             })
 
     if result["missing"] > 0:
+        # 索引核验下仍缺失 = 正文引用了索引/磁盘都不存在的编号或文件（真实问题）
         result["status"] = "FAIL"
 
     return result
+
+
+def rel_or_str(path: Path, base_dir: Path) -> str:
+    try:
+        return path.relative_to(base_dir).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def check_symbol_consistency(paper_symbols: list[dict], symbol_table: dict) -> dict:
@@ -478,8 +620,13 @@ def generate_markdown_report(report: dict) -> str:
 
         if check_name == "number_consistency":
             detail = f"{check_data.get('matched', 0)}/{check_data.get('total', 0)} 匹配"
+            if check_data.get("not_frozen"):
+                detail += f"（未锚定 {check_data['not_frozen']}）"
+            if any(d.get("type") == "frozen_missing" for d in check_data.get("details", [])):
+                detail = "冻结数字缺失，无法锚定核对"
         elif check_name == "file_reference":
-            detail = f"{check_data.get('found', 0)}/{check_data.get('total', 0)} 存在"
+            via = check_data.get("verified_via", {})
+            detail = f"{check_data.get('found', 0)}/{check_data.get('total', 0)} 存在（索引 {via.get('index', 0)} / 磁盘 {via.get('disk', 0)}）"
         elif check_name == "symbol_consistency":
             detail = f"{check_data.get('consistent', 0)}/{check_data.get('total', 0)} 一致"
         elif check_name == "code_output":
@@ -521,6 +668,8 @@ def generate_markdown_report(report: dict) -> str:
                     lines.append(f"   - 符号: {warning['symbol']}")
                 if "usage_count" in warning:
                     lines.append(f"   - 使用次数: {warning['usage_count']}")
+                if "context" in warning and warning.get("context"):
+                    lines.append(f"   - 说明: {warning['context']}")
                 lines.append("")
 
     # 下一步
@@ -599,7 +748,7 @@ def main():
 
     # 2. 文件引用检查
     print("\n[2/4] 检查文件引用...")
-    checks["file_reference"] = check_file_references(file_references, output_dir)
+    checks["file_reference"] = check_file_references(file_references, output_dir, BASE_DIR)
     print(f"  状态: {checks['file_reference']['status']}")
 
     # 3. 符号一致性检查
