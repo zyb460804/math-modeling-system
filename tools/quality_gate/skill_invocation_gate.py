@@ -78,9 +78,12 @@ REQUIRED_SKILLS = [
         "expected_file": "qa/humanizer_report.json",
         "check": "json_score",
         "json_path": ["score"],
-        # TODO(阈值口径待统一, H-12): 此处 min_value=40，而 pipeline_runner.py 的
-        # S6 handoff 与 docs/agent_workflow_standard.md 均写 "≥58/60"。两处口径
-        # 矛盾，本次仅标注，不改动判定语义（保持 40 生效，待统一后一并调整）。
+        # H-12 口径（第四轮审查 2026-08-15 核实+双阈值化）：脚本强制底线是 40——
+        # docs/agent_workflow_standard.md §六 G5.5 行实写 "score ≥ 40/60"，
+        # 现场 humanizer_report.json 的 pass_threshold 也是 40，故 min_value 保持 40；
+        # "≥58/60" 是 championship 冲奖目标（aspirational，脚本不强制），已在
+        # pipeline_runner S6 handoff 以双阈值口径并列（底线 40 / 目标 58）。
+        # 是否把 58 升为强制值待用户终裁（升档会收紧放行，属语义变更，不擅动）。
         "min_value": 40,
         "max_value": 60,
         "how_to_fix": "调 humanizer-zh-academic skill（Skill 工具）对 final_paper_source.md 做 14 种 AI 模式扫描+60 分制评分，产出 humanizer_report.json（含 score 字段）",

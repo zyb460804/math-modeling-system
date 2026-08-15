@@ -6,7 +6,7 @@ description: "逐文件提炼知识卡片。触发词：抽卡、知识卡片、
 # /card — 抽卡
 逐文件提炼知识卡片，更新 `outputs/knowledge_base.md`。
 
-调用 `prompts/02_extract_cards.md` 执行逐文件抽卡。
+调用 `prompts/_archive/02_extract_cards.md`（v4.8 已归档）执行逐文件抽卡。
 产出：可复用的知识卡片，登记到知识库。
 
 系统同步说明：任务路由 → 知识更新/资料入库 → 单题开工 → 数据理解 → 审题选模 → 代码/论文/图表/表格生产 → 动态验收 → 最终质量门 → 提交/答辩 → 经验回灌。

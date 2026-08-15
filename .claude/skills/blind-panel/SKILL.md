@@ -74,11 +74,13 @@ Lead 聚合 3 份 scorecard，写 `paper_output/qa/blind_panel_report.json`：
   "target_tier": "国一",
   "seats": {"A": {...}, "B": {...}, "C": {...}},
   "aggregate": {"min_total": 79.5, "any_criterion_below_floor": false,
-                "evidence_conflicts": [{"dim":"稳健性","seat_A":75,"seat_C":58,"delta":17}]},
-  "verdict": "refine",      # pass | refine | block
+                "evidence_conflicts": [{"dim":"稳健性","seat_A":75,"seat_C":58,"delta":17}],
+                "verdict": "refine"},   # pass | refine | block
   "bottleneck": "Seat C 正确性维度：Q3 结果无法复现"
 }
 ```
+
+> **schema 口径（2026-08-15 定）**：`verdict` 的规范位置在 `aggregate` 内，与实跑盲评产物一致。`tools/quality_gate/blind_panel_schema.py` 兼容读取历史顶层 `verdict`（旧报告），两处同写且不一致时判 FAIL（防篡改）。
 
 ## 迭代预算
 

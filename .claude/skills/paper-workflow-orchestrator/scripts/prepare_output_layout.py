@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -166,6 +167,11 @@ General workflow QA remains in the reusable `quality-assurance-auditor` skill.
 
 def main() -> int:
     configure_utf8_stdio()
+    # v4.9.3：argparse 化，--help/-h 不再触发真实写盘（原版会直接创建 paper_output/）
+    parser = argparse.ArgumentParser(
+        description="输出位置准备器：创建 paper_output/ 目录骨架、OUTPUT_LAYOUT.md 与代码工作区 README（无参数）"
+    )
+    parser.parse_args()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     for dirname in DIRECTORIES:
         (OUTPUT_DIR / dirname).mkdir(parents=True, exist_ok=True)

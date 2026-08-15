@@ -3,7 +3,8 @@
 """Skill 适用覆盖率报告（v4.8）
 
 读取 skill_applicability_matrix.json + problem_analysis.json，根据题型动态计算
-"本题适用 skill 清单"，检查覆盖率。分母是"适用数"而非"总数 67"，真实反映浪费。
+"本题适用 skill 清单"，检查覆盖率。分母是"适用数"而非"总数 54"（v4.8 归档后），
+真实反映浪费。
 
 用法：
     python skill_coverage_report.py
@@ -112,16 +113,23 @@ def compute_applicable(matrix: dict, task_types: list[str], delivery: str, mode:
                 applicable.add(s_clean)
                 reason[s_clean] = "通用建议"
 
-    # 排除不适用
+    # 排除不适用（第四轮审查 F-5 修复）：矩阵 v4.8 改版后已无 not_applicable_domestic 键，
+    # 旧排除逻辑读不到键恒返回空列表（死代码，排除静默失效）。现接现行 schema：
+    #   rarely_applicable.skills = {name: reason}   特殊场景才用，不进覆盖率分母
+    #   archived_skills.archived = {name: 去向}      v4.8 已归档，能力已抽到 references
     excluded = {}
-    for s, why in matrix.get("not_applicable_domestic", {}).get("skills", {}).items() if isinstance(matrix.get("not_applicable_domestic", {}).get("skills"), dict) else []:
-        pass
-    # not_applicable_domestic 是 list
-    na_list = matrix.get("not_applicable_domestic", {}).get("skills", [])
-    for s in list(applicable):
-        if s in na_list and delivery != "english_academic":
-            applicable.discard(s)
-            excluded[s] = "国赛中文题不适用（仅美赛/英文期刊）"
+    rare = matrix.get("rarely_applicable", {}).get("skills", {})
+    if isinstance(rare, dict):
+        for s in list(applicable):
+            if s in rare:
+                applicable.discard(s)
+                excluded[s] = str(rare[s])
+    archived = matrix.get("archived_skills", {}).get("archived", {})
+    if isinstance(archived, dict):
+        for s in list(applicable):
+            if s in archived:
+                applicable.discard(s)
+                excluded[s] = f"v4.8 已归档：{archived[s]}"
 
     return {"applicable": sorted(applicable), "excluded": excluded, "reason": reason}
 

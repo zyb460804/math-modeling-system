@@ -200,6 +200,17 @@ def main(argv=None) -> int:
         write_skip_reports(skip_reason)
         return 0
 
+    # 分母守卫：吨氨日产量为 0/缺失/非数值会让吨成本计算除零裸崩——
+    # 配置在但值非法按 fail-closed 显式失败（与 load_curves/parse_range_spec 同口径）
+    try:
+        nh3_daily = float(cfg["production"]["nh3_daily_ton"])
+    except (KeyError, TypeError, ValueError):
+        print("错误：赛题配置 production.nh3_daily_ton 缺失或非数值（吨成本分母）")
+        raise SystemExit(1)
+    if nh3_daily <= 0:
+        print(f"错误：赛题配置 production.nh3_daily_ton 必须为正数（当前 {nh3_daily}，吨成本分母为 0 无定义）")
+        raise SystemExit(1)
+
     curves = load_curves(cfg)
     sensitivity_params = {k: v for k, v in cfg["sensitivity"].items()
                           if not k.startswith("_")}

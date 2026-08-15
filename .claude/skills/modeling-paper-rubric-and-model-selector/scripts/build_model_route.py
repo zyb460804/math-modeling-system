@@ -288,4 +288,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description=(
+            "模型路线与评分点契约生成器：读取 problem_analysis.json，"
+            "生成 model_route.json、rubric_alignment.json 与 scoring_strategy.md。"
+        )
+    ).parse_args()
     raise SystemExit(main())

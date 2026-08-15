@@ -25,6 +25,29 @@ TASKS_FILE = OUTPUT_DIR / "tasks.json"
 REPORT_JSON = QA_DIR / "evidence_gate_report.json"
 REPORT_MD = QA_DIR / "evidence_gate_report.md"
 
+
+def reconfigure_paths(paper_dir: str) -> None:
+    """--paper-dir 重定向（R1）：统一重绑所有 paper_output 路径常量。
+
+    - 默认值 "paper_output" 与模块级初值一致 → 无参调用行为与旧版完全相同（兼容）；
+    - 传相对路径时相对当前工作目录解析（BASE_DIR / paper_dir），传绝对路径时
+      pathlib 拼接天然取绝对值——用户把作品目录放到桌面等场景可指向正确对象；
+    - 各函数均在调用时读取这些模块级常量，故 main() 里 parse_args 后重绑即全局生效。
+    """
+    global OUTPUT_DIR, QA_DIR, MODEL_ROUTE_FILE, FIGURE_INDEX_CANDIDATES, TABLE_INDEX_CANDIDATES
+    global MODEL_RESULTS_FILE, METRICS_FILE, CONCLUSIONS_FILE, TASKS_FILE, REPORT_JSON, REPORT_MD
+    OUTPUT_DIR = BASE_DIR / paper_dir
+    QA_DIR = OUTPUT_DIR / "qa"
+    MODEL_ROUTE_FILE = OUTPUT_DIR / "plan" / "model_route.json"
+    FIGURE_INDEX_CANDIDATES = [OUTPUT_DIR / "figure_index.json", OUTPUT_DIR / "figures" / "figure_index.json"]
+    TABLE_INDEX_CANDIDATES = [OUTPUT_DIR / "tables" / "table_index.json", OUTPUT_DIR / "table_index.json"]
+    MODEL_RESULTS_FILE = OUTPUT_DIR / "results" / "model_results.json"
+    METRICS_FILE = OUTPUT_DIR / "results" / "metrics.json"
+    CONCLUSIONS_FILE = OUTPUT_DIR / "results" / "conclusions.json"
+    TASKS_FILE = OUTPUT_DIR / "tasks.json"
+    REPORT_JSON = QA_DIR / "evidence_gate_report.json"
+    REPORT_MD = QA_DIR / "evidence_gate_report.md"
+
 # freshness_check.py 位置（同仓 .claude/skills/ 下，按 __file__ 定位，不依赖 cwd）
 FRESHNESS_SCRIPT = (
     Path(__file__).resolve().parents[2] / "context-memory-keeper" / "scripts" / "freshness_check.py"
@@ -708,7 +731,14 @@ def main() -> int:
         default=os.environ.get("MATHMODEL_EVIDENCE_GATE_MODE", "official"),
         help="official returns non-zero on missing evidence; quickstart only warns.",
     )
+    parser.add_argument(
+        "--paper-dir",
+        default="paper_output",
+        help="论文产物目录（相对当前工作目录或绝对路径；默认 paper_output，无参行为不变）",
+    )
     args = parser.parse_args()
+
+    reconfigure_paths(args.paper_dir)
 
     report = evaluate()
     write_reports(report, args.mode)

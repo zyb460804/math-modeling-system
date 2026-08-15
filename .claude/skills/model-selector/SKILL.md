@@ -56,7 +56,7 @@ disable-model-invocation: true
 **路由规则**：
 - 场景匹配优先查 `model-selection-matrix.md`，其次查 `method_matching.md`
 - 综合题型必须先用 `problem-decomposition.md` 拆解，再逐子问题选模
-- Playbook 仅在用户明确要求示例或需要端到端参考时加载，按题型名匹配文件名（如 `playbooks/evaluation.md`、`playbooks/prediction.md`）
+- Playbook 仅在用户明确要求示例或需要端到端参考时加载，按题型名匹配文件名（如 `playbooks/playbook-evaluation-decision.md`、`playbooks/playbook-ml-regression.md`）
 
 ### Step 3: 生成候选方法（2-4个）
 

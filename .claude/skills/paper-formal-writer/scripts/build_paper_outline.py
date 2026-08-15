@@ -380,4 +380,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description="正式论文大纲契约生成器：生成 paper_output/plan/paper_outline.json（证据门禁通过后运行）。"
+    ).parse_args()
     raise SystemExit(main())

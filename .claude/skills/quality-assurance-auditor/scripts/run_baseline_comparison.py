@@ -257,6 +257,17 @@ def main(argv=None) -> int:
         write_skip_reports(skip_reason)
         return 0
 
+    # 分母守卫：吨氨日产量为 0/缺失/非数值会让吨成本计算除零裸崩——
+    # 配置在但值非法按 fail-closed 显式失败（与 load_curves 同口径）
+    try:
+        nh3_daily = float(cfg["production"]["nh3_daily_ton"])
+    except (KeyError, TypeError, ValueError):
+        print("错误：赛题配置 production.nh3_daily_ton 缺失或非数值（吨成本分母）")
+        raise SystemExit(1)
+    if nh3_daily <= 0:
+        print(f"错误：赛题配置 production.nh3_daily_ton 必须为正数（当前 {nh3_daily}，吨成本分母为 0 无定义）")
+        raise SystemExit(1)
+
     params = cfg["model_params"]
     get_price = make_price_fn(params, cfg["price_periods"])
     om_coeffs = cfg["om_coeffs"]
@@ -276,7 +287,13 @@ def main(argv=None) -> int:
     print(f"  绿电比例: {optimized['green_ratio']:.1%}")
     print(f"  生产时段: {optimized['production_hours']}")
 
-    cost_improvement = (baseline['ton_nh3_cost'] - optimized['ton_nh3_cost']) / baseline['ton_nh3_cost']
+    # 分母守卫：基准吨成本为 0（如全零电价的退化配置）时改善率无定义——记 0 并保留
+    # 两侧原始成本可见，不除零裸崩
+    baseline_ton_cost = baseline['ton_nh3_cost']
+    cost_improvement = (
+        (baseline_ton_cost - optimized['ton_nh3_cost']) / baseline_ton_cost
+        if baseline_ton_cost != 0 else 0.0
+    )
     self_use_improvement = optimized['self_use_ratio'] - baseline['self_use_ratio']
     green_improvement = optimized['green_ratio'] - baseline['green_ratio']
     feed_in_improvement = baseline['feed_in_ratio'] - optimized['feed_in_ratio']

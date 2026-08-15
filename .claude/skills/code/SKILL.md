@@ -9,7 +9,7 @@ description: "判断题型与算法，生成可运行代码框架。触发词：
 
 > **与 algorithm-runner 的区别**：本 skill 从零生成新代码；`algorithm-runner` 执行已有算法模板。如需执行已有模板而非从零写代码，走 `/algorithm-runner`。
 
-调用 `prompts/19_generate_code.md` 执行代码生成。
+调用 `prompts/_archive/19_generate_code.md`（v4.8 已归档）执行代码生成。
 对齐 `outputs/method_matching.md`、`outputs/algorithm_templates.md`、`outputs/code_template_playbook.md`。
 
 输出：题型判断 → 算法推荐 → 代码结构 → 主体代码 → 直接运行/待补标注 → 论文对接说明。

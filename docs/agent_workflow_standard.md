@@ -1,6 +1,6 @@
 # Agent 工作规范（硬约束）
 
-> **v1.0 | 2026-08-02**
+> **v1.1 | 2026-08-15**（v4.9 同步：终审阶段默认 championship）
 > 背景：2026-08 实测 2023 国赛 B 题，Agent 凭任务熟悉度走"裸 Agent + 门禁"最小闭环，跳过 67 个 skill 与 89 个知识文件，论文自评仅 84 分（B+/A-），低于系统设计上限（90+）。本规范强制 Agent 必须走完整流程。
 
 ---
@@ -103,13 +103,15 @@
 
 **禁止**：论文写完不准备答辩材料。
 
-### 阶段 7：冲奖模式（championship）
+### 阶段 7：盲评终审（v4.9 起 championship 为默认，盲评必做）
 
 ```
 调用 blind-panel skill（3座独立盲评 + 20分冲突仲裁）
 → 调用 math-figure/scripts/figqa.py（图表碰撞门）
 → 调用 math-figure/scripts/render_check.py（图表质量门）
 ```
+
+> v4.9 用户偏好固化：championship 为默认模式，本阶段为必做；仅当用户显式说"切 fast"/"这次用 standard"时降级（escape hatch）。
 
 ---
 
@@ -143,7 +145,7 @@
 → （P0 改动大时回到评审，最多 3 轮）
 → 跑门禁（证据/格式/图表/G4.6/G4.10/三审计层/终检）【产出定稿】
 → 调 /defense（答辩材料，基于定稿）
-→ （冲奖）调 blind-panel 3 座盲评 + figqa 碰撞门
+→ 调 blind-panel 3 座盲评 + figqa 碰撞门（championship 默认，v4.9；escape hatch 才降级）
 ```
 
 ### 论文产出节点（多轮迭代）

@@ -140,7 +140,6 @@
     "skills": {
       "matlab-model-code-generator": "仅 MATLAB 题目",
       "matlab-code-reviewer": "仅 MATLAB 题目",
-      "matlab-runner": "仅 MATLAB 题目",
       "scan": "Legacy，资料扫描（用户明确要求时）",
       "card": "Legacy，知识卡片（用户明确要求时）",
       "rules": "Legacy，建规则库（用户明确要求时）",

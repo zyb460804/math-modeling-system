@@ -1,9 +1,9 @@
 # outputs/file_map.md
 
-> **v2.0 | 2026-05-31 标准化更新**
+> **v2.1 | 2026-08-15 口径同步**（v2.0 | 2026-05-31 标准化更新）
 > 本文件已纳入统一数学建模生产系统。
 > **统一索引入口：`outputs/INDEX.md`** — 按功能域快速定位文件。
-> 原始资料已统一归档到 `resources/01-09` 对应目录。
+> 原始资料已统一归档到 `resources/02-15` 对应目录（`01_真题与附件/` 已不存在，真题入口=根目录 `problem_files/`；v4.8 起 `prompts/` 32 个文件已归档至 `prompts/_archive/`）。
 
 > 用于记录当前项目全部文件的地图、类别、优先级、重复情况与调用环节。
 
@@ -15,9 +15,9 @@
 当前项目的**主工作区仅指 `E:\数学建模`**。本文件地图默认只纳入这个目录中的数学建模资料、脚手架、提示词和输出库，**不纳入其他附加工作目录中的统计建模资料包**。
 
 ### A. 已建立的标准工作区
-- `prompts/`：任务提示词
+- `prompts/`：已归档（v4.8，32 个文件移入 `prompts/_archive/`，主路径仅存 README）
 - `outputs/`：知识库与规则沉淀区
-- `01_真题/` ~ `09_参考资料/`：后续归档目录
+- `resources/02_优秀论文` ~ `15_Typst模板`：资料归档目录（v4.x 扩至 02-15）
 - `05_我的作品/占位区|个案工作区|归档区`：作品迭代区
 
 ### B. 当前项目内的原始数学建模资料包
@@ -46,8 +46,8 @@
 2. `outputs/asset_registry.md`
 3. `outputs/task_router.md`
 4. `outputs/case_feedback_loop.md`
-5. `prompts/00_route_task.md`
-6. `prompts/22_case_feedback_loop.md`
+5. `prompts/_archive/00_route_task.md`（v4.8 已归档）
+6. `prompts/_archive/22_case_feedback_loop.md`（v4.8 已归档）
 
 这层的作用不是新增知识点，而是把已有母库真正串成“先分流、再执行、做完再回灌”的闭环系统。
 

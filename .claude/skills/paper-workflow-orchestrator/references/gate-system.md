@@ -2,8 +2,10 @@
 
 > **用途**：定义从题目解析到最终提交的 6 道门禁（G1-G6），每道门禁有明确的进入条件、通过条件、失败回退。
 > **来源**：MathModeling-skills/CLAUDE.md + design-principles.md
-> **版本**：v1.0
+> **版本**：v1.1（补 G4.10 + 项目路径口径说明）
 > **核心原则**：门禁不是阶段（"我在哪里"），而是"我必须满足什么才能离开"。
+>
+> **路径口径（v1.1）**：本文档承自源仓库，文内 `planning/`、`methods/Qx/`、`workspace/data_clean/`、`code/Qx/`、`paper/audits/` 等路径为源仓库布局示意；在本项目中统一落到 `paper_output/`（如 `paper_output/step1/problem_analysis.json`、`paper_output/code/modeling/`、`paper_output/qa/`、`paper_output/results/`）。门禁**语义**以本文档为准，磁盘**路径**以 `paper_output/OUTPUT_LAYOUT.md` 为准。另注：G5.1-G5.9 是 `tools/quality_gate/skill_invocation_gate.py` 的 skill 调用子门编号，与本文档 G5（PAPER_SECTION_READY）同名不同义，勿混淆。
 
 ---
 
@@ -27,6 +29,8 @@ G4.7 ARTIFACT_GATE [实物门, v4.5]
 G4.8 NUMBER_CONSISTENCY [数字一致性客观核对, v4.5]
   ↓
 G4.9 FORMULA_VERIFICATION [公式核验门, v4.5]
+  ↓
+G4.10 IMAGE_EMBEDDED [图片嵌入门, v4.7]
   ↓
 G4 RESULTS_FROZEN [承重墙]
   ↓
@@ -323,6 +327,14 @@ evidence_refs:
 - 非真题：文件中说明检索过程与理由，人工确认放行。
 - 失败回退：回退到 analyze/审题选模，补齐官方公式核对后重跑。
 
+## G4.10: IMAGE_EMBEDDED（图片嵌入门，v4.7）
+
+**守卫目标**：Markdown 源稿的 `![](path)` 语法图片数必须等于 Word 实际内嵌图片数，防止"见图N"纯文字占位漏检（2026-08 实测 6 张图全部未嵌入后设立）。
+
+- 通过条件：`tools/quality_gate/image_embed_check.py` 比对 Markdown `![](path)` 计数 ↔ docx `word/media/*` 实际内嵌图计数，一致才 PASS。
+- 失败回退：用 `![](相对路径)` 语法写图（不要写"见图N"纯文字）→ 重跑 `paper-formal-writer/scripts/format_formal_docx.py` → 重跑 G4.10。
+- 执行链：内嵌于 `tools/quality_gate/final_gate_runner.py`（终检第 6 项）。
+
 ## G4: RESULTS_FROZEN（结果已冻结）
 
 **门禁名称**：结果冻结
@@ -487,6 +499,11 @@ G2 → methods/Qx/poc/<method>_poc.py + feasibility numbers
 G2.5 → methods/Qx/decisions/method-selector_modeler_decision.md [DECIDED by human]
 G3 → code/Qx/reviews/qx_<lang>_review.md (>= 5 PASS)
 G4.5 → methods/Qx/decisions/*_modeler_decision.md (result verdict + stability verdict)
+G4.6 → verifications/verify_*.py 全 PASS + qa/verify_gate_report.json
+G4.7 → tools/quality_gate/paper_artifact_check.py（docx 表格实体/xlsx 数据区/代码存在）
+G4.8 → qa/number_consistency_report.json（论文数字 ↔ results/*.json|csv）
+G4.9 → paper_output/plan/formula_verification.md（无【待核验】残留）
+G4.10 → tools/quality_gate/image_embed_check.py（![]() 计数 ↔ word/media/*）
 G4 → results/Qx/reports/frozen_numbers.json + qx_solution_package_for_writer.md
 G5 → paper/sections/qx.tex (word count + discussion depth + render_check)
 G6 → paper/audits/ (consistency + completeness + QA 三份报告)

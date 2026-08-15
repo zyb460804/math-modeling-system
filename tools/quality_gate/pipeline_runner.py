@@ -34,6 +34,25 @@ v4.9.1（CR-5 / G-05 / G-07 修复）：
         无离线批量模式，不硬接脚本，在 S4/S6 handoff 与 S8 输出中显式列出
   - 状态文件向后兼容：stage id 只增不改；新增字段（skip_count/skipped_steps）只增
 
+v4.9.4（第四轮对抗性审查修复，2026-08-15）：
+  - G2.5/G4.5 决策门真阻断：agent 阶段 auto-advance 除 produces 外还须在
+    qa/decision_log.json 查到对应 gate 条目（reason 达标、非 AI 代写）——
+    此前决策门只写在 handoff 文本里，从未校验（现场 S2 已 approved 而决策日志不存在）
+  - classify FAIL 优先级提到 stdout skip 扫描前：rc=0 + 报告 status=FAIL +
+    输出混有 skip 行 → 旧序误判 SKIP 推进，现判 FAIL（FAIL > SKIP > WARN > PASS）
+  - --stage 单阶段推进后不再打 "🎉 全流水线 approved"（其余阶段未过 ≠ 全过）
+  - check_produces 目录判定排除 __pycache__/隐藏文件（仅剩字节码 ≠ 完成）
+  - init 遇不可解析的旧 pipeline.json 时显式告警再重置（消灭无痕重置）
+  - run_script_stage/agent_handoff 对中途损坏的状态文件 fail-closed（不崩栈）
+  - S6 handoff 阈值改双阈值口径：G5.5 门禁底线 ≥40/60（skill_invocation_gate
+    实际执行值，docs/agent_workflow_standard.md §六同），championship 目标 ≥58/60
+    （ aspirational，脚本不强制；此前单写 58 与门禁 40 分裂，单写 40 又丢了冲奖目标）
+
+编号口径警示（第四轮 C2）：本 runner 的 S1-S8 阶段 id 与 pipeline_manager.py
+STAGE_ORDER 一致；paper-workflow-orchestrator/scripts/workflow_guard.py 另有一套
+S0-S8（其 S6=证据门禁/S7=正式稿/S8=格式门禁），与本 runner 的 S5/S6/S7 语义
+错位一格——跨工具引用阶段时以"阶段名"为准，勿只看编号。
+
 v4.9.3（第三轮审查修复，2026-08-15）：
   - P0-1 盲评校验与 final_gate_runner 共用同一实现：
     championship_missing_evidence 改调 blind_panel_schema（同目录小模块）——
@@ -140,6 +159,10 @@ STAGES: list[dict] = [
         "skills": ["modeling-paper-rubric-and-model-selector", "model-selector", "decision-logger"],
         "produces": ["plan/model_route.json", "plan/model_selection_check.md"],
         "decision_gate": "G2.5（选模理由 ≥50 字，用户填，AI 不得代写）",
+        # 第四轮审查：决策门真阻断——auto-advance 前必须能在 qa/decision_log.json
+        # 查到 gate=G2.5 且 reason ≥50 字、非 AI 代写的条目（此前只在 handoff 提示，从不校验）
+        "decision_gate_id": "G2.5",
+        "min_reason_chars": 50,
         "handoff": (
             "【模型路线】\n"
             "1. 调 modeling-paper-rubric-and-model-selector 生成 plan/model_route.json\n"
@@ -180,6 +203,9 @@ STAGES: list[dict] = [
         "skills": ["algorithm-runner", "math-figure", "chart-recommender", "decision-logger"],
         "produces": ["results/model_results.json", "results/metrics.json", "results/conclusions.json"],
         "decision_gate": "G4.5（结果确认 ≥30 字，用户填，AI 不得代写）",
+        # 第四轮审查：同 S2 的 G2.5——auto-advance 前校验 decision_log.json 的 G4.5 条目
+        "decision_gate_id": "G4.5",
+        "min_reason_chars": 30,
         "handoff": (
             "【运行结果】\n"
             "1. 调 algorithm-runner 跑 paper_output/code/modeling/ 代码\n"
@@ -219,7 +245,8 @@ STAGES += [
             "【正式写作】\n"
             "1. 对照 section-architecture.md + evidence-pyramid.md + scoring_rubric.md，写 plan/writing_alignment_check.md（G5.4 写作对照门）\n"
             "2. 调 paper-formal-writer 出大纲 → Agent 全局写作 final_paper_source.md\n"
-            "3. 调 humanizer-zh-academic 降AI味（G5.5 门，≥58/60）→ 生成 qa/humanizer_report.json\n"
+            "3. 调 humanizer-zh-academic 降AI味（G5.5 门：门禁底线 ≥40/60，championship 目标 ≥58/60）"
+            "→ 生成 qa/humanizer_report.json\n"
             "4. 调 citation-tracer 引用验证（G5.8 门）\n"
             "5. 调 ai-failure-checker AI失败模式检查（G5.7 门，blocking=0）\n"
             "6. 🏆 championship 必做项（v4.9 默认模式）：\n"
@@ -328,12 +355,16 @@ def check_produces(stage: dict) -> tuple[bool, list[str]]:
             continue
         if path.is_dir():
             try:
-                empty = not any(path.iterdir())
+                # 第四轮审查：__pycache__/隐藏文件不算产出——代码删除后残留的
+                # 字节码目录不再是"非空即完成"（否则 S3 只剩 pycache 也 approved）
+                real_entries = [e for e in path.iterdir()
+                                if e.name != "__pycache__" and not e.name.startswith(".")]
+                empty = not real_entries
             except OSError as exc:
                 problems.append(f"{p}: 目录不可读（{exc}）")
                 continue
             if empty:
-                problems.append(f"{p}: 目录为空（空目录 ≠ 完成）")
+                problems.append(f"{p}: 目录为空（空目录/仅 __pycache__ ≠ 完成）")
             continue
         size = path.stat().st_size
         if size < 10:
@@ -345,6 +376,44 @@ def check_produces(stage: dict) -> tuple[bool, list[str]]:
             except Exception as exc:
                 problems.append(f"{p}: JSON 不可解析（坏 JSON = 未完成）：{exc}")
     return (not problems), problems
+
+
+# ── 用户决策门真阻断（第四轮审查）──
+# 此前 G2.5/G4.5 只出现在 handoff 文本里"提示"，auto-advance 只查 produces——
+# 产出文件齐备即 approved，用户审批从未被校验（实测现场：S2 已 approved 而
+# qa/decision_log.json 不存在）。现按 decision-logger skill 的落盘契约校验：
+#   paper_output/qa/decision_log.json = {"decisions": [{"gate": "G2.5", "reason": "...",
+#                                                        "source": "user", ...}]}
+# 口径对齐 decision-logger/scripts/log.py 的 GATES：G2.5 ≥50 字 / G4.5 ≥30 字；
+# source 显式为 ai 一律拒（AI 不得代写）。缺文件/坏 JSON/无条目/字数不足 = 未过门。
+def check_decision_gate(stage: dict) -> list[str]:
+    gate = stage.get("decision_gate_id")
+    if not gate:
+        return []
+    min_chars = int(stage.get("min_reason_chars", 1))
+    log_path = OUTPUT_DIR / "qa" / "decision_log.json"
+    if not log_path.exists():
+        return [f"{gate} 用户决策未记录：qa/decision_log.json 不存在（调 decision-logger skill，理由由用户填写，AI 不得代写）"]
+    try:
+        data = json.loads(log_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return [f"{gate} 决策日志不可解析（坏 JSON = 未记录）：{exc}"]
+    entries = data.get("decisions") if isinstance(data, dict) else data
+    if not isinstance(entries, list):
+        return [f"{gate} 决策日志格式不符（应为含 decisions 列表的 JSON）——按 decision-logger skill 的 schema 重写"]
+    hits = [e for e in entries if isinstance(e, dict) and str(e.get("gate", "")).strip().upper() == gate.upper()]
+    if not hits:
+        return [f"{gate} 用户决策未记录：decision_log.json 无 gate={gate} 条目"]
+    rejects: list[str] = []
+    for e in hits:
+        reason = str(e.get("reason", "")).strip()
+        if str(e.get("source", "user")).strip().lower() == "ai":
+            rejects.append(f"{gate} 条目 source=ai（AI 代写，无效）")
+        elif len(reason) < min_chars:
+            rejects.append(f"{gate} 条目理由仅 {len(reason)} 字 < {min_chars}（疑似敷衍/AI 模板）")
+        else:
+            return []  # 任一条合格即过门
+    return rejects
 
 
 # ── 脚本执行 ──
@@ -409,20 +478,25 @@ def classify_script_result(rc: int, stdout: str, script: dict) -> tuple[str, str
     第二轮审查 D 兜底：rc=0 不再无条件当 PASS——
       - 报告 status 命中 FAIL 词表 → FAIL（子脚本 rc 与磁盘报告矛盾时，以报告为准）
       - 报告 status 是未知词（不在 SKIP/WARN/FAIL/PASS 任一名单）→ 至少 WARN
+
+    第四轮审查（2026-08-15）：FAIL 优先级提到 stdout skip 扫描之前——
+    旧序先扫 "skip" 行会提前 return SKIP，把磁盘报告 status=FAIL 整个吞掉
+    （rc=0 + 输出混有一行 skip + 报告 FAIL → 误判 SKIP 推进，而非 FAIL 阻断）。
+    优先级修正为 FAIL > SKIP > WARN > PASS，各词表命中结果不变。
     """
     if rc != 0:
         return "FAIL", ""
+    status = _report_status(script.get("report"))
+    if status in FAIL_STATUSES:
+        return "FAIL", f"报告 status={status}（子脚本 rc=0 但报告明示失败，以磁盘报告为准；优先于 stdout 的 skip 行）"
     for ln in stdout.splitlines():
         low = ln.strip().lower()
         if low.startswith("skip") or low.startswith("[skip]"):
             return "SKIP", ln.strip()
-    status = _report_status(script.get("report"))
     if status in SKIP_STATUSES:
         return "SKIP", f"报告 status={status}"
     if status in WARN_STATUSES:
         return "WARN", f"报告 status={status}"
-    if status in FAIL_STATUSES:
-        return "FAIL", f"报告 status={status}（子脚本 rc=0 但报告明示失败，以磁盘报告为准）"
     if status is None or status in PASS_STATUSES:
         return "PASS", ""
     return "WARN", f"报告 status={status} 不在已知名单（SKIP/WARN/FAIL/PASS），按 WARN 兜底"
@@ -481,6 +555,11 @@ def print_championship_handoff(stage: dict, missing: list[tuple[dict, str]]) -> 
 def run_script_stage(stage: dict) -> int:
     print(f"\n═══ [{stage['id']}] {stage['name']} — 脚本自动 ═══")
     state = load_state()
+    if state is None:
+        # 第四轮审查：状态文件在入口校验后被并发改坏时 fail-closed，
+        # 不让 None.setdefault 崩栈（崩溃退出码虽非 0，但不可读且状态未落盘）
+        print(f"[runner] pipeline.json 不可读（损坏/被并发写入）——fail-closed，中止 {stage['id']}")
+        return 1
     set_stage_status(state, stage["id"], "in_progress")
 
     n_pass = n_skip = n_warn = 0
@@ -501,14 +580,18 @@ def run_script_stage(stage: dict) -> int:
         else:  # FAIL
             print("    ❌ FAIL")
             print(f"       输出尾部: {tail[-400:]}")
-            set_stage_status(load_state(), stage["id"], "rework")
+            st_now = load_state()
+            if st_now is not None:  # 状态文件中途损坏时不崩栈，返回码仍为 FAIL
+                set_stage_status(st_now, stage["id"], "rework")
             print(f"\n❌ [{stage['id']}] 门禁未通过 — 请 Agent 修复后重跑 pipeline_runner.py")
             return 1
 
     # championship 证据文件存在性检查（非脚本强制；无产物 → 不得 approved）
     missing = championship_missing_evidence(stage)
     if missing:
-        set_stage_status(load_state(), stage["id"], "in_progress")
+        st_now = load_state()
+        if st_now is not None:
+            set_stage_status(st_now, stage["id"], "in_progress")
         print_championship_handoff(stage, missing)
         return 2
 
@@ -536,6 +619,10 @@ def run_script_stage(stage: dict) -> int:
 def agent_handoff(stage: dict) -> int:
     print(f"\n═══ [{stage['id']}] {stage['name']} — 🤖 Agent 接力 ═══")
     state = load_state()
+    if state is None:
+        # 第四轮审查：同 run_script_stage 的 fail-closed 防护（None.get 会崩栈）
+        print(f"[runner] pipeline.json 不可读（损坏/被并发写入）——fail-closed，中止 {stage['id']}")
+        return 1
     if stage_status(state, stage["id"]) == "not_started":
         set_stage_status(state, stage["id"], "in_progress")
 
@@ -557,6 +644,9 @@ def print_status() -> int:
         print(f"[runner] 流水线未初始化，请先: python tools/quality_gate/pipeline_runner.py init")
         return 1
     print(f"\n{'═'*60}\n  PIPELINE STATUS（v4.9）\n{'═'*60}")
+    # 第四轮 C2：编号口径警示——workflow_guard.py 的 S0-S8 与本状态机错位一格
+    print("  ⚠ 编号口径：本表 S1-S8 对齐 pipeline_manager.py；orchestrator 的 workflow_guard.py")
+    print("    另有 S0-S8（其 S6=证据门禁/S7=正式稿/S8=格式门禁），跨工具以阶段名为准，勿只看编号")
     sym = {"not_started": "·", "in_progress": "▶", "approved": "✓", "rework": "↩", "skipped": "⏭"}
     for s in STAGES:
         st = stage_status(state, s["id"])
@@ -587,6 +677,9 @@ def init_pipeline() -> int:
             print(f"[runner] pipeline.json 已存在且含阶段状态：{PIPELINE_FILE}")
             print(f"[runner] 如需重置，删掉该文件再 init")
             return 0
+        # 第四轮审查：损坏/无阶段状态的旧文件不再被"无痕重置"——init 是显式动作仍可重置，
+        # 但必须留话，避免误以为上一条 return 0 分支接住了它
+        print(f"[runner] ⚠ 现有 pipeline.json 不可解析或无阶段状态，init 将重置该文件：{PIPELINE_FILE}")
     state = {
         "version": "v4.9",
         "created_at": datetime.now().isoformat(timespec="seconds"),
@@ -639,18 +732,29 @@ def main() -> int:
         if stage["type"] == "script":
             return run_script_stage(stage)
         else:  # agent
-            # 产出齐备 → 自动推进（Agent 已经在上一轮做完了）
+            # 产出齐备 → 自动推进（Agent 已经在上一轮做完了）。
+            # 第四轮审查：决策门（G2.5/G4.5）与 produces 同为放行条件——
+            # 缺用户决策记录时不得 approved，转为 handoff 等用户补记（exit 2）
             ok, problems = check_produces(stage)
-            if ok:
+            gate_problems = check_decision_gate(stage)
+            if ok and not gate_problems:
                 set_stage_status(load_state(), sid, "approved")
                 print(f"✅ [{sid}] 产出已齐备 — 自动推进")
                 continue
-            for p in problems:
-                print(f"  ✗ 产出未达标: {p}")
+            for p in problems + gate_problems:
+                print(f"  ✗ 未达标: {p}")
             return agent_handoff(stage)
 
     state = load_state() or {}
     skipped_stages = [s["id"] for s in STAGES if stage_status(state, s["id"]) == "skipped"]
+    not_advanced = [s["id"] for s in STAGES if stage_status(state, s["id"]) not in ADVANCED_STATUSES]
+    if not_advanced:
+        # 第四轮审查：--stage 只推进单阶段时（如 agent 阶段产出齐备即 approve+continue），
+        # 其余阶段可能 not_started——绝不打 "🎉 全流水线 approved"（局部推进 ≠ 全过）
+        print(f"\n▶ 本次推进到此为止 — 尚有 {len(not_advanced)} 个阶段未通过：{', '.join(not_advanced)}")
+        if skipped_stages:
+            print(f"    另有 {len(skipped_stages)} 个阶段含 SKIP：{', '.join(skipped_stages)}（SKIP≠PASS）")
+        return 0
     if skipped_stages:
         # 谨慎口径：SKIP ≠ PASS，存在 SKIP 时不打 "全流水线 approved"
         print(f"\n⚠️ 流水线推进完成 — 但 {len(skipped_stages)} 个阶段含 SKIP：{', '.join(skipped_stages)}")

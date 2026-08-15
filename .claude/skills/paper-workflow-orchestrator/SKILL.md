@@ -1,6 +1,6 @@
 ---
 name: paper-workflow-orchestrator
-description: "MathModel Skill 总入口。触发词：数学建模、生成论文、分析赛题、CUMCM、MathorCup、华数杯、美赛、ICM、MathModel。任何数学建模任务先读本 skill 再路由子 skill。"
+description: "MathModel Skill 总入口。触发词：数学建模、生成数学建模论文、开始生成、跑一下这个题、分析赛题、使用 MathModel Skill、CUMCM、MathorCup、华数杯、美赛、ICM、MathModel、跑流水线、推进阶段、一键跑门禁。任何数学建模任务先读本 skill 再路由子 skill。"
 ---
 
 # 论文生成全流程编排器
@@ -44,11 +44,17 @@ python .claude/skills/paper-workflow-orchestrator/scripts/preflight_check.py
 - ❌ 论文写完不调 `/defense` 答辩材料
 - ❌ 把"门禁通过"等同于"质量达标"
 
-**交付前必须调用的 skill**（缺一不可）：
-1. `humanizer-zh-academic`（降 AI 味，段落级 + 60 分制评分）
-2. `/review` 或 `paper-reviewer` agent（独立 9 维度评审）
-3. `/defense`（10 类问答 + 30 条追问链）
-4. （冲奖模式）`blind-panel`（3 座独立盲评）
+**交付前必须调用的 skill 与落盘证据**（缺一不可；产出文件由 `tools/quality_gate/skill_invocation_gate.py`（G5.1-G5.9 子门）逐一核验，该门内嵌于 `tools/quality_gate/final_gate_runner.py` 终检，缺任一产物即 FAIL）：
+1. 知识查阅 → `paper_output/plan/knowledge_checkpoint.md`（G5.1，须声明已读 INDEX.md/method_matching/scoring_rubric/phrase_bank/section-architecture）
+2. 选模对照 → `paper_output/plan/model_selection_check.md`（G5.2，≥500 字）
+3. 代码复用对照 → `paper_output/plan/code_reuse_check.md`（G5.3，≥300 字）
+4. 写作对照 → `paper_output/plan/writing_alignment_check.md`（G5.4，摘要六要素/引言五要素对齐）
+5. `humanizer-zh-academic`（降 AI 味，段落级 + 60 分制评分）→ `paper_output/qa/humanizer_report.json`（G5.5）
+6. `/review` 或 `paper-reviewer` agent（独立 9 维度评审）→ `paper_output/qa/paper_reviewer_report.md`（G5.6）
+7. `ai-failure-checker`（7-mode blocking checklist）→ `paper_output/qa/ai_failure_check_report.json`（G5.7，blocking=0）
+8. `citation-tracer`（引用溯源）→ `paper_output/qa/citation_trace_report.md`（G5.8）
+9. `/defense`（10 类问答 + 30 条追问链）→ `paper_output/qa/defense_qa_bank.md`（G5.9，≥10 个 `##` 标题）
+10. `blind-panel`（3 座独立盲评 + 20 分冲突仲裁 + 稀缺性校准）→ `paper_output/qa/blind_panel_report.json`（championship 默认模式必调，verdict=pass 才放行；降级 standard/fast 才可省）
 
 ## 状态门（每阶段开始前执行）
 
@@ -59,6 +65,54 @@ python .claude/skills/paper-workflow-orchestrator/scripts/workflow_guard.py --st
 ```
 
 脚本会写入 `paper_output/qa/workflow_guard_report.json`。若退出码非 0 或 `status != "PASS"`，必须按报告失败项补齐上一阶段产物，不得跳步。
+
+> ⚠️ **编号口径**：workflow_guard 的 S0-S8 是**产物检查点**编号（S5=结果证据、S6=证据门禁、S8=格式门禁），与 pipeline_runner 的 S1-S8 **流水线阶段**编号（S5=证据门禁、S6=写作、S8=终检）存在错位。两套编号并存但语义不同，换算见下方「流水线一键调度」映射表，不要混用。
+
+## 流水线一键调度（pipeline_runner，v4.9）
+
+> **脚本环节自动跑，认知环节 Agent 接力**。把本 skill 的路由逻辑代码化，防止 Agent 凭记忆跳过门禁（与 CLAUDE.md 同款命令）。
+
+```bash
+python tools/quality_gate/pipeline_runner.py init              # 初始化（9 阶段状态机）
+python tools/quality_gate/pipeline_runner.py status            # 看当前进度
+python tools/quality_gate/pipeline_runner.py                   # 推进到下一个接力点（默认）
+python tools/quality_gate/pipeline_runner.py --stage S5_evidence_gate  # 只跑指定阶段
+```
+
+- 退出码：0=推进完成 / 1=门禁 FAIL / 2=到 Agent 接力点（等 Agent 完成后重跑）
+- 状态文件：`paper_output/state/pipeline.json`（兼容 `qa-auditor/scripts/pipeline_manager.py`，可并用）
+- 认知型阶段（S1/S2/S3/S4/S6）：runner 检查 `produces` 产物齐备即自动推进，不齐则打印 AGENT_HANDOFF（该调哪些 skill + 该写哪些文件）
+- 脚本型阶段（S3b/S5/S7/S8）：runner 自动 subprocess 跑门禁脚本，PASS 才推进
+
+### pipeline_runner S1-S8 阶段表（与 G 门禁/必调 skill 对应）
+
+| 阶段 | 类型 | 调用 | 产物/门禁 |
+|---|---|---|---|
+| S1_problem_analysis | Agent | problem-doc-model-selector + award-paper-rag + authoritative-data-harvester | `step1/problem_analysis.json` + G5.1 知识查阅 |
+| S2_modeling_route | Agent | modeling-paper-rubric-and-model-selector + model-selector + decision-logger | `plan/model_route.json`、`plan/model_selection_check.md`（G5.2）+ 🚪G2.5 用户决策 |
+| S3_code_generation | Agent | data-cleaning-and-visualization + model-code-and-result-generator + feature-engineering | `code/modeling/` 非空 + G5.3 代码复用 + G2 PoC 门 |
+| S3b_code_verify | 脚本 | `verify_gate.py` | G4.6 自证门 |
+| S4_run_results | Agent | algorithm-runner + math-figure + chart-recommender + decision-logger | `results/{model_results,metrics,conclusions}.json` + figqa 碰撞门 + 🚪G4.5 用户决策 |
+| S5_evidence_gate | 脚本 | evidence_gate / parameter / reasonableness / number / numeric_sanity | G5 证据总门（5 项报告） |
+| S6_paper_writing | Agent | paper-formal-writer + humanizer-zh-academic + citation-tracer + ai-failure-checker | `final_paper_source.md` + G5.4/G5.5/G5.7/G5.8 |
+| S7_format_gate | 脚本 | format_formal_docx / check_paper_format / consistency-audit / completeness-audit | 格式门禁 + 三审计层前两层 |
+| S8_final_qa | 脚本 | freshness_check + final_gate_runner | G4.7-G4.10 + G5.1-G5.9 skill 调用门 + championship 盲评证据（`qa/blind_panel_report.json` 缺失则不得 approved） |
+
+### workflow_guard ↔ pipeline_runner 编号换算
+
+| 产物检查点（workflow_guard --step） | 对应流水线阶段（pipeline_runner） |
+|---|---|
+| S0 准入预检 | init 前置（preflight_check.py） |
+| S1 审题分析 | S1_problem_analysis |
+| S2 模型路线 | S2_modeling_route |
+| S3 数据与图表计划 | S3_code_generation（清洗与计划并入） |
+| S4 建模代码 | S3_code_generation + S3b_code_verify |
+| S5 结果证据 | S4_run_results |
+| S6 证据门禁 | S5_evidence_gate |
+| S7 正式稿 | S6_paper_writing（+ S7 前置） |
+| S8 格式门禁 | S7_format_gate（终检另见 S8_final_qa） |
+
+> workflow_guard 是**逐阶段产物完备性**自查器（本 skill 自带）；pipeline_runner 是**全流程推进调度器**（`tools/quality_gate/`）。正式推进以 pipeline_runner 为主轴，workflow_guard 用于进阶段前自查。
 
 ## Quickstart 用途说明
 
@@ -136,7 +190,7 @@ python .claude/skills/paper-workflow-orchestrator/scripts/workflow_guard.py --st
 - 两者不矛盾：同一意图默认最深输出（见 CLAUDE.md 触发词统一入口）
 
 ## 入口路由规则
-- 当用户说”开始生成数学建模论文””帮我做这个数学建模题””分析赛题””使用 MathModel Skill”或不知道该调用哪个 skill 时，先读取本技能。
+- 当用户说”开始生成数学建模论文””帮我做这个数学建模题””分析赛题””使用 MathModel Skill”或不知道该调用哪个 skill 时，先读取本技能（完整触发词清单见本文档 frontmatter，含“开始生成”“跑一下这个题”“生成数学建模论文”“跑流水线/推进阶段”等 Start Rule 口令）。
 - 先判断用户目标：正式论文走 Agent-native 全流程；只要题意、模型、数据、QA 或正文时，路由到对应子 skill。
 - 不要让用户理解或选择多个 skill 的顺序；由本技能负责说明下一阶段，并在阶段完成后回到本技能判断下一步。
 - 如用户只是验证安装或跑 quickstart，可调用：
@@ -147,7 +201,7 @@ python .claude/skills/paper-workflow-orchestrator/scripts/workflow_guard.py --st
 本 skill 作为总控，**必须**在全流程中引导子 skill 读取 `outputs/` 中已沉淀的知识资产。各子 skill 的联动规则见各自 SKILL.md，以下为总控层面的桥接：
 
 ### 知识骨干（outputs/ 系统）
-`outputs/` 包含 89 个规则/模板/知识库文件，按 8 大功能域组织，是本项目的**知识骨干**。所有 skill 执行时必须优先复用这些沉淀，而非临时发挥。
+`outputs/` 包含 79 个规则/模板/知识库文件（根目录 75 + scripts/ 1 + _reports/ 3；实时清单以 `outputs/INDEX.md` 为准），按 8 大功能域组织，是本项目的**知识骨干**。所有 skill 执行时必须优先复用这些沉淀，而非临时发挥。
 
 核心入口：
 - `outputs/INDEX.md` — 统一索引，按功能域查到目标文件
@@ -156,22 +210,27 @@ python .claude/skills/paper-workflow-orchestrator/scripts/workflow_guard.py --st
 - `outputs/writing_templates.md` — 写作模板库（高分表达/结构模板）
 - `outputs/final_quality_gate.md` — 最终质量门（P0/P1/P2 阻断项）
 
-### 手动/局部任务桥接（prompts/ 系统）
-`prompts/` 包含 31 个工作流提示词（00-30），是本项目的**手动工作流**系统。当用户需要局部任务（审题、审论文、答辩、代码生成等）而非完整流水线时，路由到对应 prompt：
+### 手动/局部任务桥接（v4.8 起：prompts/ 已归档，统一走 skill）
 
-| 口令 | 对应 prompt | 用途 |
+> **⚠️ v4.8 变更**：`prompts/` 的 32 个文件（00-30 共 31 个提示词 + MASTER_PROMPT_math_modeling.txt）已全部归档到 `prompts/_archive/`（100% 有 skill 替代，主路径不再使用，详见 `prompts/README.md`）。局部任务**不再路由到 prompts**，统一走下表 skill 入口（与 CLAUDE.md「触发词统一入口」一致）：
+
+| 口令/意图 | 路由 | 默认输出 |
 |------|-------------|------|
-| 审题 | `prompts/11_identify_problem_type.md` + `prompts/12_select_model_route.md` | 题型判断+选模 |
-| 审论文 | `prompts/04_review_my_paper.md` + `prompts/08_review_math_modeling_paper.md` | 全文评分+改稿 |
-| 生成代码 | `prompts/19_generate_code.md` | 代码生成 |
-| 生成图示 | `prompts/20_generate_figures.md` | 图示方案 |
-| 准备答辩 | `prompts/06_mock_defense.md` + `prompts/09_defense_math_modeling.md` | 答辩准备 |
-| 生成提交包 | `prompts/21_generate_submission_pack.md` | 提交打包 |
+| 审题 / 选模 / 推荐模型 | `analyze` skill（内部调度 problem-doc-model-selector + model-selector） | 全量审题选模报告 |
+| 审论文 / 打分 / 严格打分 | `review` skill → `paper-reviewer` agent | 全量深度评审报告（9 部分） |
+| 生成代码 | `code` skill | 从零生成代码框架 |
+| 运行算法 / 执行代码 | `algorithm-runner` skill | 执行已有模板 |
+| 生成图示 / 画图 | `figure` skill（统一入口，分派子 skill） | 全部所需图 + figure_index.json |
+| 润色 / 改写 / polish | `paper-polisher` skill | 12 点检查 + 段落改写 + 60 分制评分 |
+| 降 AI 味 / 降重 | `humanizer-zh-academic`（默认）/ `aigc-reduce`（备选） | 14 种 AI 模式扫描 + 评分报告 |
+| 准备答辩 / 模拟答辩 | `defense` skill | 问答库 + 追问链 + 模拟评分 |
+| 生成提交包 | `submit` skill | 比赛提交包 |
+| 盲评 / 盲审 / 模拟评委 | `blind-panel` skill | 3 座盲评 + 冲突仲裁 + 校准档位 |
 
 **执行规则**：
-1. 正式赛题走 Skill 自动化流水线（本 skill 路由）
-2. 局部/灵活任务走 `prompts/` 手动工作流
-3. 两套系统共享 `outputs/` 知识骨干，不矛盾
+1. 正式赛题走 Skill 自动化流水线（本 skill 路由，推荐用 pipeline_runner 推进）
+2. 局部/灵活任务走上表 skill 统一入口
+3. 需要回退旧提示词时从 `prompts/_archive/` 恢复（仅应急，主路径不使用）
 
 ## 阶段路由表
 | 当前目标 | 优先调用 |
@@ -219,11 +278,17 @@ python .claude/skills/paper-workflow-orchestrator/scripts/workflow_guard.py --st
 | 进入新阶段，需要执行门控检查 | 读取 `references/gate-system.md` → 执行对应 G1-G6 门控；**提交前必须运行 `tools/quality_gate/final_gate_runner.py --paper-dir <作品目录>`，全部 PASS 才放行（v4.5）** |
 | 结果冻结，需要锁定数字 | 读取 `references/frozen-numbers-convention.md` → 生成 `frozen_numbers.json` |
 | 候选方法验证，需要 PoC 检查 | 读取 `references/poc-validation-gate.md` → 运行 PoC 验证 |
-| 三审计层全过、championship 冲奖终审 | `.claude/agents/blind-panel-judge.md`（3 座并行）→ `blind-panel` skill 聚合 |
-| 跨阶段一致性可疑（符号/数字/模型族漂移）| qa-auditor `references/feedback_layer2_backtrack.md` 定向回检 |
+| 三审计层全过、championship（v4.9 默认）提交前盲评终审 | `.claude/agents/blind-panel-judge.md`（3 座并行）→ `blind-panel` skill 聚合 |
+| 跨阶段一致性可疑（符号/数字/模型族漂移）| `quality-assurance-auditor/references/feedback_layer2_backtrack.md`（L2 定向回检，不重做整阶段） |
 | 图表提交前碰撞门 | `math-figure/scripts/figqa.py` + `pdf_qa.sh`（从编译 PDF）|
 | 评分需按题型差异化加权 | 加载 `outputs/dim_weights.json`（module_weights_7dim / stage_dim_weights）|
 | 用户想切换节奏/UX | 见本文档"运行模式"（fast/standard/championship）+ "Friendly Mode" |
+| **一键推进流水线（S1-S8）/ 自动跑门禁** | `tools/quality_gate/pipeline_runner.py`（v4.9，脚本环节自动跑 + 认知环节 AGENT_HANDOFF，见上方「流水线一键调度」） |
+| **提交前核验必调 skill 是否真调过（G5.1-G5.9）** | `tools/quality_gate/skill_invocation_gate.py`（v4.8，final_gate_runner 终检内嵌执行） |
+| 需要独立评审 / 打分（G5.6） | `review` skill → `paper-reviewer` agent → `paper_output/qa/paper_reviewer_report.md` |
+| 需要答辩材料（G5.9） | `defense` skill → `paper_output/qa/defense_qa_bank.md` |
+| 需要降 AI 味（G5.5） | `humanizer-zh-academic` skill → `paper_output/qa/humanizer_report.json` |
+| 各阶段完成后更新三层记忆 / 中断后续跑 | `context-memory-keeper` skill（工作/短期/长期记忆 + 知识图谱集成） |
 
 ## 适用时机
 - 用户已经在项目根目录下按约定放好了赛题 PDF/Word 和附件数据，需要“从零到万字论文”的一条龙自动流程时。
@@ -279,7 +344,7 @@ python .claude/skills/paper-workflow-orchestrator/scripts/workflow_guard.py --st
 - 推荐存在：`paper_output/ref_check.md`
 - 推荐存在：`paper_output/micro_units/`（作为提示词资产和验证草稿，不作为正式主流程）
 - 建议存在：`paper_output/figures/` 与 `paper_output/data_cleaned/`（用于数据预处理与结果分析配图）
-- **championship 模式追加（v4.1）**：`blind-panel` 3 座盲评 PASS + `math-figure/scripts/figqa.py` 图表碰撞门 PASS + qa-auditor `feedback_layer{1-4}` 四层反馈通过；冲奖稿最终校准用，standard 模式可选
+- **championship 追加（v4.9 默认开启）**：`blind-panel` 3 座盲评 PASS（`qa/blind_panel_report.json` verdict=pass）+ `math-figure/scripts/figqa.py` 图表碰撞门 PASS + qa-auditor `references/feedback_layer{1-4}_*.md` 四层反馈通过；仅当用户显式降级 standard/fast 时才可省略
 
 ## 脚本清单（本技能实际会用到的）
 - `scripts/prepare_output_layout.py`：输出位置准备器。
@@ -401,9 +466,11 @@ python .claude/skills/quality-assurance-auditor/scripts/auto_correct_loop.py --m
   - `paper_output/micro_units/*.txt`：每个微单元一个文件。
   - `paper_output/generate_log.json`：生成日志。
 - 最终交付：
-  - `paper_output/final_paper.md`：合并后的 Markdown 论文草稿。
-  - `paper_output/final_paper.docx`：Word 草稿，作为主要交付物。
+  - `paper_output/final_paper_source.md`：Agent 全局写作的正式 Markdown 源稿（正式流程唯一写作源，对应 pipeline_runner S6 produces）。
+  - `paper_output/final_paper.docx`：正式 Word 论文（主要交付物；全部门禁通过才能称最终稿）。
+  - `paper_output/final_paper.md`：微单元合并草稿（quickstart/低能力兜底链路产物，非正式源稿）。
   - `paper_output/ref_check.md`：交叉引用与编号断链报告。
+  - championship（默认）追加：`paper_output/qa/blind_panel_report.json`（3 座盲评 verdict=pass）+ figqa 碰撞门通过 + L1-L4 四层反馈执行记录。
 
 ## 工作流程（对应 workflow_full 分步）
 
@@ -484,7 +551,14 @@ python .claude/skills/quality-assurance-auditor/scripts/auto_detect_and_fix.py -
     ```bash
     python .claude/skills/quality-assurance-auditor/scripts/auto_detect_and_fix.py --stage s7
     ```
-12. 所有检测通过后，最终交付。
+12. **终检必调 skill（G5.5-G5.9 + championship，缺一不可）**：
+    - `humanizer-zh-academic` 降 AI 味 → `paper_output/qa/humanizer_report.json`
+    - `paper-reviewer` agent 独立评审 → `paper_output/qa/paper_reviewer_report.md`
+    - `ai-failure-checker` → `paper_output/qa/ai_failure_check_report.json`（blocking=0）
+    - `citation-tracer` 引用溯源 → `paper_output/qa/citation_trace_report.md`
+    - `/defense` 答辩材料 → `paper_output/qa/defense_qa_bank.md`
+    - （championship 默认）`blind-panel` 3 座盲评 → `paper_output/qa/blind_panel_report.json`（verdict=pass）+ `math-figure/scripts/figqa.py` 碰撞门
+13. 所有检测通过后，运行 `python tools/quality_gate/pipeline_runner.py --stage S8_final_qa`（等价于 `tools/quality_gate/final_gate_runner.py`）一键终检，全部 PASS 才最终交付。
 
 ### Quickstart 验证流程（不是正式论文生产流程）
 0. **输出目录规划**:
@@ -497,8 +571,8 @@ python .claude/skills/quality-assurance-auditor/scripts/auto_detect_and_fix.py -
    - 调用 `modeling-paper-rubric-and-model-selector/scripts/build_model_route.py`，生成 `paper_output/plan/model_route.json`、`rubric_alignment.json` 和 `scoring_strategy.md`。
    - 若该步骤失败，流程继续，QA 回退到 `problem_analysis.json`。
 3. **外部资源获取 (Optional)**:
-   - 调用 `authoritative-data-harvester` 或 `g-sci` (若存在) 填充 `crawled_data/`。
-   - **Memory Update**: 将获取的文献/数据源更新至 `memoryskill.md`。
+   - 调用 `authoritative-data-harvester` skill 填充 `crawled_data/`。
+   - **Memory Update**: 调用 `context-memory-keeper` skill，将获取的文献/数据源写入三层记忆。
 4. 调用 `data-cleaning-and-visualization/scripts/run_pipeline.py`：先生成 `data_plan.json`、`visualization_plan.json` 与 `figure_index.json`，再扫描 `problem_files/` 与 `crawled_data/`，产出清洗数据与图表到 `paper_output/`。
 5. 调用 `model-code-and-result-generator/scripts/build_result_contracts.py`：根据模型路线、清洗数据和图表计划生成 `model_results.json`、`metrics.json`、`conclusions.json` 与 `table_index.json`。真实赛题中应继续让 Agent 在 `paper_output/code/modeling/` 二次生成或修改专用建模代码，并补齐真实结果。
 6. 调用 `quality-assurance-auditor/scripts/pipeline.py`：检查 `problem_files/`，优先根据模型路线、评分点、数据图表和结果证据生成动态 `paper_output/tasks.json`。

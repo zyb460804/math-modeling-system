@@ -1,3 +1,11 @@
+"""口径警示（R3，勿改编号只读此说明）：本脚本的 S0-S8 与
+tools/quality_gate/pipeline_runner.py / pipeline_manager.py 的 S1-S8 是两套不同源的编号——
+本脚本 S3="数据与图表计划"在 runner 无独立阶段，自此错位一格：
+S0 准入预检↔runner 无编号；S1 审题分析↔S1_problem_analysis；S2 模型路线↔S2_modeling_route；
+S3 数据与图表计划↔（无）；S4 建模代码↔S3_code_generation(+S3b)；S5 结果证据↔S4_run_results；
+S6 证据门禁↔S5_evidence_gate；S7 正式稿↔S6_paper_writing；S8 格式门禁↔S7_format_gate
+（runner 的 S8_final_qa 在本脚本无对应）。跨脚本引用阶段号一律以阶段名（如 S5_evidence_gate）为准，勿按数字对齐。
+"""
 from __future__ import annotations
 
 import argparse

@@ -469,4 +469,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description=(
+            "微单元离线生成器：按 paper_output/tasks.json、占位模板与结果证据"
+            "离线生成微单元草稿（低能力模型兑底草稿，不替代正式主笔）。"
+        )
+    ).parse_args()
     raise SystemExit(main())

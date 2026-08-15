@@ -281,6 +281,9 @@ def run_audit(questions: list[str], verbose: bool = False) -> dict:
 
             if severity == "CRITICAL":
                 result["status"] = "FAIL"
+                # 只有全局产物自身缺失/空壳才把 global_artifacts 维度标 FAIL
+                # （此前由结尾统一置 FAIL，会把 per_question 的失败错记到全局维度头上）
+                result["checks"]["global_artifacts"]["status"] = "FAIL"
                 result["failures"].append({
                     "type": issue_type,
                     "severity": severity,
@@ -406,6 +409,9 @@ def run_audit(questions: list[str], verbose: bool = False) -> dict:
                     "path": pattern.format(q=q, q_lower=q_lower),
                     "description": description + empty_note
                 })
+                # per_question 关键产物缺失 → 该维度标 FAIL（与全局维度对称，
+                # 此前只有"无 Q* 子目录"的 WARN 路径会写本维度状态）
+                result["checks"]["per_question"]["status"] = "FAIL"
                 result["failures"].append({
                     "type": "empty_artifact" if info["exists"] else "missing_critical",
                     "severity": severity,
@@ -462,10 +468,10 @@ def run_audit(questions: list[str], verbose: bool = False) -> dict:
     if total_expected > 0:
         result["score"] = int(total_found / total_expected * 100)
 
-    # 更新总体状态
+    # 更新总体状态（各维度状态已在各自分支就地标注——
+    # 此前此处无条件把 global_artifacts 置 FAIL，会错记 per_question 的失败）
     if result["failures"]:
         result["status"] = "FAIL"
-        result["checks"]["global_artifacts"]["status"] = "FAIL"
     elif result["warnings"]:
         result["status"] = "WARN"
 

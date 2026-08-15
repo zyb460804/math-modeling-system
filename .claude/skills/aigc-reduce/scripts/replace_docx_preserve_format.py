@@ -320,7 +320,17 @@ def replace_docx(src_docx: str, md_path: str, dst_docx: str):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print(__doc__)
-        sys.exit(1)
-    replace_docx(sys.argv[1], sys.argv[2], sys.argv[3])
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "保留 Word 格式替换段落（AIGC 降重专用）：按章节标题定位，"
+            "章节内段落按顺序对应 markdown，原地替换保留 run 格式。"
+        ),
+        epilog="示例：python replace_docx_preserve_format.py 原.docx 改后.md 输出.docx",
+    )
+    parser.add_argument("src_docx", help="原始 Word 文档路径")
+    parser.add_argument("md_path", help="改写降重后的 markdown 路径")
+    parser.add_argument("dst_docx", help="输出 Word 文档路径")
+    args = parser.parse_args()
+    replace_docx(args.src_docx, args.md_path, args.dst_docx)

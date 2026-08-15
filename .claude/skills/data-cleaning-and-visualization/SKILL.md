@@ -135,3 +135,7 @@ paper_output/
 | `scripts/extract_pdf_tables.py` | Camelot PDF 表格提取——赛题附件数据表一键转 CSV/Excel + 索引 | "提取表格" / "PDF 表格" / "Camelot" |
 
 赛题 PDF 常含附表（成分表/负荷数据）。`pip install camelot-py`（lattice 模式另需 Ghostscript）。已验证真实提取 A 题.pdf。
+## 快速 EDA 协议（v4.8 新增）
+
+拿到 CSV/Excel 的**第一步**遵循 `references/quick-eda-protocol.md`（v4.8 整合自已归档的 csv-data-summarizer）：立即自动执行全量 EDA（概览/统计/缺失/分布/相关性/质量/建模建议 8 步），不问用户"想分析什么"。
+

@@ -98,7 +98,9 @@ Spearman 秩相关（非线性关系）
 
 ---
 
-## 自动化脚本
+## 自动化脚本（⚠️ 脚本未落地）
+
+> 2026-08-15 审计标记：`scripts/quick_eda.py` 尚未实现（v4.8 消化时只落了协议文档，归档源 csv-data-summarizer 仅有无 CLI 的 analyze.py）。以下为规划接口；落地前按上文 8 步流程由 Agent 直接执行。
 
 ```bash
 python .claude/skills/data-cleaning-and-visualization/scripts/quick_eda.py \

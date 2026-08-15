@@ -1,7 +1,8 @@
 # AGENTS.md — 数学建模生产系统完整规则
 
-> **版本：v4.4 | 更新：2026-07-25**（与 CLAUDE.md 同步）
+> **版本：v4.9 | 更新：2026-08-15**（与 CLAUDE.md 同步）
 > **v4.4 变更摘要：** 系统整理 + 实测验证。math-model-producer 归档(单生产系统成型)、RAG 修复(去重 254→251 / md 尾随空格根因修复 / 索引 rebuild 6863 节点)、路由文档全面更新(20+ 处)、实测验证(预检/状态门/门禁脚本跑通、RAG 召回储能论文、11 个工具链可用)、paper_output 归档分层。详见 CLAUDE.md v4.4 摘要。
+> **v4.8/v4.9 同步（2026-08-15 审计补齐）：** ① 运行模式默认 championship（v4.9 用户偏好固化，escape hatch 才降级）；② `resources/01_真题与附件/` 已不存在（真题入口=根目录 `problem_files/`，v4.5 已修正，本文件 §6.B 原表述已删）；③ `outputs/final_quality_gate_workflow.md` 已归档（v4.8，被 `final_quality_gate.md` 覆盖）；④ `outputs/extracted_document_text/`、`outputs/extracted_pdf_text/` 目录已不存在（提取报告在 `outputs/_reports/`）；⑤ `prompts/` 32 个文件 v4.8 全部归档至 `prompts/_archive/`（本文档 prompts 引用均已带 `_archive/` 前缀）。
 > **系统架构：** 单生产系统——根目录 `outputs/`(知识骨干) + `.claude/skills/`(54 个 skill，v4.8 大扫除后) + `.claude/agents/`(9 个 agent) 统一驱动；`prompts/` 32 个手动工作流已于 v4.8 全部归档至 `prompts/_archive/`（能力由 skill 统一入口覆盖）；`math-model-producer/` 已于 2026-07-25 归档至 `resources/_archive/math-model-producer_old/`，不再有独立子系统。
 > **核心入口：** `.claude/skills/paper-workflow-orchestrator/SKILL.md` 是正式赛题的唯一总入口；`outputs/INDEX.md` 是规则/模板的唯一索引；手动任务分流用 `outputs/task_router.md`（旧 `prompts/_archive/00_route_task.md` 已归档至 `prompts/_archive/`）。
 
@@ -81,10 +82,10 @@
 
 若用户未指定具体个案，默认优先建设通用数学建模数据库、规则库、模板库与生产系统，而非围绕单一作品展开。
 
-### 原则 7：评分按题型加权，冲奖稿过盲评（v4.1）
+### 原则 7：评分按题型加权，终审过盲评（v4.1 引入，v4.9 默认）
 - **评分加权**：`outputs/scoring_rubric.md` 的 7 模块 100 分制分值不改，但判等前按 task_type 加权（`outputs/dim_weights.json` module_weights_7dim，clamp [0.7,1.5]）。task_type 来自 `problem_analysis.json`。
 - **多子问题论文**：用 Per-Qi 加权聚合（`paper-reviewer` agent §10），只 refine 挂科 Qi，不整篇返工。
-- **冲奖终审**：standard 模式走三审计层即可；championship 模式追加盲评 Panel（`blind-panel` skill，3 座独立盲评 + 20 分冲突仲裁 + 真实稀缺性校准）+ figqa 图表碰撞门 + qa-auditor 四层反馈（L1 Critic/L2 回检/L3 Panel/L4 校准）。
+- **终审（v4.9 默认 championship）**：默认走三审计层 + 盲评 Panel（`blind-panel` skill，3 座独立盲评 + 20 分冲突仲裁 + 真实稀缺性校准）+ figqa 图表碰撞门 + qa-auditor 四层反馈（L1 Critic/L2 回检/L3 Panel/L4 校准）；用户显式说"切 fast"/"这次用 standard"才降级（escape hatch）。
 - **自评易虚高**：禁止用单评审者自评冒充获奖档位；Outstanding≈top 1-2%、国一≈top 5-8%，盲评负责校准回真实档位。
 
 ---
@@ -229,7 +230,7 @@
 先用 `outputs/INDEX.md` 定位功能域，再用 `outputs/task_router.md` 判断（旧 prompts 分流入口已归档）当前任务属于系统建设、知识更新、单题建模、论文改稿、代码生成、图表表格、答辩准备还是提交冲刺。
 
 ### 阶段 2：知识更新/资料入库
-新增资料先扫描建图；新增知识点、提示词、算法或案例经验时，必须按 `outputs/knowledge_update_workflow.md` 执行（旧 prompts/_archive/29 为历史版本），判断是否进入母库、deliverables 或子系统。资料归档统一放 `resources/01-09` 对应目录。
+新增资料先扫描建图；新增知识点、提示词、算法或案例经验时，必须按 `outputs/knowledge_update_workflow.md` 执行（旧 prompts/_archive/29 为历史版本），判断是否进入母库、deliverables 或子系统。资料归档统一放 `resources/02-15` 对应目录（`01_真题与附件/` 已不存在，真题入口=根目录 `problem_files/`）。
 
 ### 阶段 3：单题开工与数据理解
 新题先用 `paper-workflow-orchestrator` skill 建立任务包；只要涉及题面附件、字段、参数或数据文件，就先用 `outputs/data_cleaning_standards.md` 统一字段、单位、指标方向、缺失异常、参数来源和 P0 数据风险。
@@ -243,10 +244,10 @@
 ### 阶段 6：动态验收与最终质量门
 个案接近完成时先做 demo/real_case 动态验收；提交或答辩前必须用 `outputs/final_quality_gate.md` 检查 P0 阻断项，未通过不得宣称可提交、可答辩或可复现。
 
-**v4.1 终审增强（按模式）**：
-- **standard**：三审计层（consistency / completeness / quality-assurance）全绿即可。
-- **championship（冲奖）**：追加 `blind-panel` 3 座盲评（`blind-panel-judge` agent ×3 并行，20 分冲突仲裁）+ `math-figure/scripts/figqa.py` 图表碰撞门 + qa-auditor 四层反馈（L1 阶段 Critic / L2 跨阶段回检 / L3 Panel / L4 证据校准）。自评须经盲评校准，不得直接冒充获奖档位。
-- **fast**：仅 L1 单次 sanity check，用于选题试跑或时间极紧。
+**v4.1 终审增强（v4.9 起 championship 为默认，不再按模式二选一）**：
+- **championship（★ 默认，v4.9）**：三审计层（consistency / completeness / quality-assurance）全绿 + `blind-panel` 3 座盲评（`blind-panel-judge` agent ×3 并行，20 分冲突仲裁）+ `math-figure/scripts/figqa.py` 图表碰撞门 + qa-auditor 四层反馈（L1 阶段 Critic / L2 跨阶段回检 / L3 Panel / L4 证据校准）。自评须经盲评校准，不得直接冒充获奖档位。
+- **standard（降级备选）**：三审计层全绿即可；用户显式要求时才降级（escape hatch）。
+- **fast**：仅 L1 单次 sanity check，用于选题试跑或时间极紧（同样需用户显式确认）。
 
 ### 阶段 7：提交/答辩与经验回灌
 完成提交包或答辩材料后，按 `outputs/case_feedback_loop.md` 把可复用经验回灌到母库；只服务单题的内容留在案例层。
@@ -290,7 +291,6 @@
 
 | 目录 | 内容 |
 |------|------|
-| `resources/01_真题与附件/` | 真题与题面附件 |
 | `resources/02_优秀论文/` | 获奖论文 |
 | `resources/03_方法算法/` | 讲义与模型专题 |
 | `resources/04_代码模板/` | 14种必备算法 + 50种算法 + 创新型算法源代码 |
@@ -720,8 +720,7 @@
 当任务接近提交、答辩、分享或交付时，必须区分 `demo` 与 `real_case`，并优先调用：
 - `prompts/_archive/24_dynamic_acceptance.md`
 - `prompts/_archive/28_final_quality_gate.md`
-- `outputs/final_quality_gate_workflow.md`
-- `outputs/final_quality_gate.md`
+- `outputs/final_quality_gate.md`（v4.8 起 `final_quality_gate_workflow.md` 已归档，勿再引用）
 
 任何 P0 阻断项未通过时，不得宣称”可提交、可答辩、可复现”。终检必须覆盖论文、代码、图表、表格、PPT、AI 使用说明、匿名要求和关键数字追溯。
 
@@ -746,12 +745,12 @@ python tools/quality_gate/final_gate_runner.py --paper-dir <作品目录> --work
 ### F. 统一抽取文本层
 新增资料、优秀论文、提示词包、模板包或代码包进入系统前，优先检查：
 - `outputs/material_inventory.md`
-- `outputs/extracted_document_text/`
-- `outputs/extracted_pdf_text/`
-- `outputs/_reports/award_pdf_extraction_report.md`
-- `outputs/_reports/award_pdf_ocr_report.md`
+- `outputs/_reports/`（award_pdf_extraction_report.md / award_pdf_ocr_report.md / document_extraction_log.txt）
 - `outputs/code_asset_index.md`
 - `outputs/extracted_material_synthesis.md`
+- `outputs/current_paper_extracted.txt`
+
+（`outputs/extracted_document_text/`、`outputs/extracted_pdf_text/` 目录已不存在，勿再引用。）
 
 不要把未 OCR、低文本量、只看过文件名的材料当作已读材料。资料回灌应先转成可检索文本、代码索引或回灌清单，再进入知识库、方法库、评分库和模板库。
 

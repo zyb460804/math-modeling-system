@@ -244,4 +244,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description=(
+            "微单元合并器：合并微单元草稿为 paper_output/final_paper.md 并导出 Word，"
+            "附编号与交叉引用检查报告。"
+        )
+    ).parse_args()
     main()

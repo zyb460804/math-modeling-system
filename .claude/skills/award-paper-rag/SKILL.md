@@ -93,6 +93,10 @@ python scripts/rag_cli.py chat
 - **model-selector**：选模时可调本 skill 查"同类题型历年用什么模型"
 - **paper-formal-writer**：写作时可调本 skill 查"某章节的优秀写法范式"
 
+## 精读协议（v4.8 新增）
+
+对检索命中的优秀论文做深度吸收时，遵循 `references/bilingual-reader-protocol.md`（v4.8 整合自已归档的 nature-reader）：中英对照逐节精读，产出 paper.md / source_map.json / translation_notes.md 三件套。
+
 ## 依赖
 
 - Python 3.10+

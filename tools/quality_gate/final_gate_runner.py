@@ -28,6 +28,14 @@
 fail-closed 原则（CR-2）：任何被依赖的检查器脚本缺失 → 对应门记 pass=False 并使整体 FAIL，
 不做"未找到，跳过"的无痕放行；显式 --skip-* 旗标是唯一合法跳过途径。
 
+v4.10.2（第四轮对抗性审查修复，2026-08-15）：
+  - G4.8 扫描范围排除 _archive* 目录段（docx 与 results 同口径，对齐 G4.7）——
+    归档数字不再稀释无来源比例、归档旧 results 不再给正文数字"假来源"
+  - G4.8 docx 在案但无可提取文本 → FAIL_P0（检查未实际执行 ≠ 通过，旧版静默 PASS）
+  - G5 证据门闭环接线（R1 消缺）：evidence_gate.py 已支持 --paper-dir 后，调用方
+    把已 resolve 的 paper_dir 传入——证据门检查对象与 --paper-dir 一致，
+    重定向时报告内留"已重定向"信息行（旧版为"无法重定向"警示，根因已修）
+
 v4.10.1（第三轮审查修复，2026-08-15）：
   - P0-1 盲评门真消费 verdict：与 pipeline_runner 共用 blind_panel_schema 校验
     （verdict 枚举且仅 pass 放行 / 每座 weighted_total 有限数值 ≥0 / conflicts 非空拒）
@@ -120,7 +128,15 @@ def generic_number_check(paper_dir: Path, missing_ratio_fail: float = MISSING_RA
     """
     warnings: list[str] = []
     info: list[str] = []
-    docx_files = list(paper_dir.rglob("*.docx"))
+
+    def _is_active(f: Path) -> bool:
+        # 第四轮审查：归档目录段（_archive* 前缀）不参与数字核对——与
+        # paper_artifact_check.check_artifacts 同一口径。旧版把归档 docx/results
+        # 一并扫入有两重污染：归档数字匹配 results 会稀释无来源比例（去重分母
+        # 变大，真 FAIL 被冲淡成 PASS）；归档 results 的旧数字会给正文"假来源"
+        return not any(p.startswith("_archive") for p in f.relative_to(paper_dir).parts[:-1])
+
+    docx_files = [f for f in paper_dir.rglob("*.docx") if _is_active(f)]
     if not docx_files:
         return info, ["未找到 docx，跳过数字一致性"]
     # 提取论文数字（只取≥2位整数或小数，降低噪音；仅 w:t 可见文本，见 docx_visible_text）
@@ -132,9 +148,14 @@ def generic_number_check(paper_dir: Path, missing_ratio_fail: float = MISSING_RA
             text += "\n" + docx_visible_text(d)
         except Exception:
             continue
+    if not text.strip():
+        # 第四轮审查：docx 在案但一个可见文本都提取不到（zip 损坏/全解析失败）——
+        # 检查未实际执行却 rc=0 属假绿，按 FAIL_P0 升级（G4.7 也会对解析失败报 FAIL）
+        return info, ["FAIL_P0: docx 存在但无可提取文本（解析全部失败？），数字一致性本次未实际核对，不得据此宣称通过"]
     paper_nums = [float(x) for x in NUM_RE.findall(text) if len(x) >= 2]
-    # 结果文件数字
-    result_files = list(paper_dir.rglob("results/*.json")) + list(paper_dir.rglob("results/*.csv"))
+    # 结果文件数字（同样排除归档目录里的旧 results）
+    result_files = ([f for f in paper_dir.rglob("results/*.json") if _is_active(f)]
+                    + [f for f in paper_dir.rglob("results/*.csv") if _is_active(f)])
     result_nums: set[float] = set()
     for rf in result_files:
         try:
@@ -309,7 +330,22 @@ def main() -> int:
     # 3) 证据门（official）—— 检查器缺失 = FAIL（fail-closed），显式 --skip-evidence 是唯一合法跳过
     if not args.skip_evidence:
         if (scripts / "evidence_gate.py").exists():
-            add("G5_EVIDENCE_GATE", [py, str(scripts / "evidence_gate.py"), "--mode", "official"], workdir)
+            # 第四轮闭环接线（R1 消缺）：evidence_gate.py 已支持 --paper-dir（reconfigure_paths
+            # 统一重绑路径常量），调用方把已 resolve 的 paper_dir 传入——证据门从此检查的
+            # 就是本 runner 的被检对象，"作品放桌面导致门禁查错 paper_output"的假绿/误伤双隐患消除
+            r_ev = run([py, str(scripts / "evidence_gate.py"), "--mode", "official",
+                        "--paper-dir", str(paper_dir)], workdir)
+            ev_note = ""
+            try:
+                if paper_dir != (workdir / "paper_output").resolve():
+                    ev_note = (f"ℹ 证据门已重定向：--paper-dir={paper_dir}（≠ workdir 的 paper_output，"
+                               f"报告落在该作品目录的 qa/ 下）")
+            except Exception:
+                pass
+            steps.append({"gate": "G5_EVIDENCE_GATE", "cmd": r_ev["cmd"], "rc": r_ev["rc"],
+                          "pass": r_ev["rc"] == 0,
+                          "out_tail": ((ev_note + "\n") if ev_note else "") + r_ev["out"],
+                          "err_tail": r_ev["err"]})
         else:
             steps.append({"gate": "G5_EVIDENCE_GATE", "cmd": "N/A", "rc": 1, "pass": False,
                           "out_tail": "evidence_gate.py 未找到（fail-closed）——检查器缺失=FAIL，唯一合法跳过途径是显式 --skip-evidence", "err_tail": ""})

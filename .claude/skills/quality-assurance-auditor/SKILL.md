@@ -98,7 +98,7 @@ description: "强制审计论文生成质量，防止模型偷换、逻辑断链
 5. 机械重复检测（High Priority）
    - **允许凑字数**：允许使用”随着…的发展”、”综上所述”等学术连接词来增加篇幅，**不做**Fail判定。
    - **打击机械复制**：严查**连续段落完全重复**（如同一段话连续出现两次）、**占位符未替换**（如出现”补充说明”字样且内容重复）。若发现这种”乱七八糟”的重复，直接 FAIL。
-   - **结构核查**：对比 `paper_prompt_default.md`，重点检查核心章节是否遗漏，对具体的段落格式可适当放宽。
+   - **结构核查**：对比 `modeling-paper-rubric-and-model-selector/references/paper_prompt_default.md`，重点检查核心章节是否遗漏，对具体的段落格式可适当放宽。
 
 ## 附加产物
 - **Word 导出 (docx)**: 审计通过后，若存在 `final_paper.md`，必须调用转换工具（如 pandoc 或 python-docx）将其转换为 `final_paper.docx`，作为最终交付物。不应只交付 Markdown。
@@ -195,3 +195,7 @@ python .claude/skills/quality-assurance-auditor/scripts/evidence_gate.py --mode 
 | `scripts/fallback_router.py` | L2 容错 7 类备用链（算法/编译/公式失败时切换备用方案） | "fallback" / "备用方案" / 容错自动触发 |
 
 L1-L4 容错全落地：L1 auto_detect_and_fix → L2 fallback_router → L3 consistency LOW_CONFIDENCE → L4 pipeline rework + HIL。
+## 结果验证规则（v4.8 新增）
+
+结果合理性人工复核规则集见 `references/result-validation-rules.md`（v4.8 整合自已归档的 result-validator）：三层验证 + 配置驱动说明 + 常见结果错误模式 + 禁止行为。`check_result_reasonableness.py`（qa_config.json 驱动）与 `check_numeric_sanity.py`（inf/nan/量级）通过后，Agent 仍须按该规则集做人工层复核。
+

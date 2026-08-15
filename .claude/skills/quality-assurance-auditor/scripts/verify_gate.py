@@ -198,6 +198,16 @@ def run_one(script: Path) -> dict:
             "stdout_tail": "",
             "stderr_tail": "TIMEOUT (>300s)",
         }
+    except OSError as exc:
+        # fail-closed：脚本在 glob 与执行之间被并发删除/权限不可读等 OS 层错误，
+        # 按该 verify FAIL 处理（不是跳过）——崩整门会让后续 verify 全部漏跑
+        return {
+            "script": str(script).replace("\\", "/"),
+            "passed": False,
+            "returncode": -1,
+            "stdout_tail": "",
+            "stderr_tail": f"OSERROR: {exc}",
+        }
 
 
 def main() -> int:

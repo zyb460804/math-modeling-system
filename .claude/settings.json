@@ -65,7 +65,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Write|Edit",
+        "matcher": "Write|Edit|mcp__filesystem__write_file|mcp__filesystem__edit_file|mcp__filesystem__move_file",
         "hooks": [
           {
             "type": "command",
@@ -85,7 +85,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|mcp__filesystem__write_file|mcp__filesystem__edit_file",
         "hooks": [
           {
             "type": "command",

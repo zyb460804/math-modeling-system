@@ -524,4 +524,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description=(
+            "数据与图表计划生成器：生成 paper_output/plan/data_plan.json、"
+            "visualization_plan.json 与 figure_index.json。"
+        )
+    ).parse_args()
     raise SystemExit(main())

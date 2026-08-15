@@ -711,7 +711,13 @@ def main():
         print(f"❌ 论文文件不存在: {paper_path}")
         sys.exit(1)
 
-    paper_text = paper_path.read_text(encoding="utf-8")
+    try:
+        # utf-8-sig：兼容带 BOM 的源稿（与 check_number_consistency.py 同口径）；
+        # GBK 等其它编码读不动时显式退出 1，而不是 UnicodeDecodeError 裸 traceback
+        paper_text = paper_path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"❌ 无法读取论文文件 {paper_path}（需 UTF-8 编码）：{exc}")
+        sys.exit(1)
     print(f"✅ 加载论文: {paper_path}")
 
     # 加载frozen_numbers

@@ -74,6 +74,9 @@ DETECTORS = {
         "description": "图表质量检查",
         "fixer": CORRECTORS_DIR / "figure_auto_fixer.py",
         "fix_description": "自动修正图表参数并重新渲染",
+        # render_check.py 是子命令式 CLI，不带子命令只打印 help 且 rc=0——
+        # 必须显式传 check-all 并消费其 rc（与 auto_detect_and_fix.py 同源修复）
+        "args": ["check-all"],
     },
     "latex": {
         "script": ROOT / ".claude/skills/latex-renderer/scripts/render_formulas.py",
@@ -121,16 +124,39 @@ DETECTORS = {
 CORRECTION_LOG = []
 
 
+def _skip_reason(output: str) -> str | None:
+    """rc=0 的输出是否实为 SKIP（口径复制自 auto_detect_and_fix.py）。
+
+    number/result/parameter 缺 qa_config 时 rc=0 且行首打印 "SKIP（...）：..."——
+    "未实际检查"不能冒充"检测通过"，调用方据此以 [--] SKIP 明示。
+    """
+    for ln in output.splitlines():
+        low = ln.strip().lower()
+        if low.startswith("skip") or low.startswith("[skip]"):
+            return ln.strip()
+    return None
+
+
 def run_detector(name: str, config: dict) -> dict:
-    """运行检测脚本，返回 {passed, errors, output}"""
+    """运行检测脚本，返回 {passed, errors, output, skip_reason}
+
+    fail-closed 对齐（auto_detect_and_fix.py 同源修复，旧版三处假绿）：
+    - 检测脚本不存在 = FAIL（旧版 return passed=True 使任一检测器路径失效都显示"通过"）；
+    - 子进程解释器用 sys.executable（本机全局 python 指向坏 venv，PATH 上的 "python" 不可用）；
+    - 检测器自定义参数经 config["args"] 透传（figure 的 render_check.py 不带子命令
+      只打印 help 且 rc=0，旧写法使图表检测通道恒绿）；
+    - rc=0 但输出行首 SKIP = 未实际检查，返回 skip_reason 供调用方明示（不冒充通过）。
+    """
     script = config["script"]
     if not script.exists():
-        return {"passed": True, "errors": [], "output": f"脚本不存在: {script}", "skipped": True}
+        msg = f"检测脚本不存在: {script}"
+        return {"passed": False, "errors": [msg], "output": msg, "skip_reason": None}
 
     print(f"  [?] 检测: {config['description']}...")
 
     # 构建命令
-    cmd = ["python", str(script)]
+    cmd = [sys.executable, str(script)]
+    cmd.extend(config.get("args") or [])
     # 证据门禁需要 --mode official 参数
     if "evidence_gate" in str(script):
         cmd.extend(["--mode", "official"])
@@ -149,6 +175,7 @@ def run_detector(name: str, config: dict) -> dict:
         )
         output = (result.stdout or "") + (result.stderr or "")
         passed = result.returncode == 0
+        skip_reason = _skip_reason(output) if passed else None
 
         # 解析错误信息
         errors = []
@@ -184,7 +211,7 @@ def run_detector(name: str, config: dict) -> dict:
 
         status = "[OK] PASS" if passed else "[!!] FAIL"
         print(f"    {status} ({len(errors)} 个问题)")
-        return {"passed": passed, "errors": errors, "output": output}
+        return {"passed": passed, "errors": errors, "output": output, "skip_reason": skip_reason}
 
     except subprocess.TimeoutExpired:
         print("    [~] 超时")
@@ -211,11 +238,11 @@ def run_fixer(name: str, config: dict, errors: list) -> bool:
         encoding="utf-8",
     )
 
-    # 构建修复命令
-    fix_cmd = ["python", str(fixer), "--errors", str(error_file)]
+    # 构建修复命令（解释器用 sys.executable：本机 PATH 上的 "python" 是坏 venv）
+    fix_cmd = [sys.executable, str(fixer), "--errors", str(error_file)]
     # combined 模式：修复时加 --fix-all
     if config.get("combined"):
-        fix_cmd = ["python", str(fixer), "--fix-all"]
+        fix_cmd = [sys.executable, str(fixer), "--fix-all"]
 
     try:
         result = subprocess.run(
@@ -273,8 +300,9 @@ def run_stage(name: str, max_rounds: int = 3, dry_run: bool = False) -> bool:
         # 检测
         result = run_detector(name, config)
 
-        if result.get("skipped"):
-            print(f"  [>] 跳过（脚本不存在）")
+        if result.get("skip_reason"):
+            # rc=0 但行首 SKIP（如缺 qa_config）：未实际检查 ≠ 通过，明示后不阻断
+            print(f"\n  [--] SKIP（未实际检查 ≠ 通过）：{result['skip_reason']}")
             return True
 
         if result["passed"]:

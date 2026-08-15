@@ -114,3 +114,7 @@ description: "自动定位并获取权威公开数据（优先API/官方批量�
 | `scripts/akshare_fetch.py` | akshare 宏观/金融/行业数据获取（GDP/CPI/股价/行业产量/汇率等） | "拉宏观数据" / "经济数据" / "akshare" |
 
 国赛 C 题常需宏观数据。`pip install akshare`，`--list macro` 查可用接口，`--fetch <接口名>` 拉取。
+## 参考资料（v4.8 新增）
+
+多源文献检索路由见 `references/multi-source-search.md`（v4.8 整合自已归档的 nature-academic-search）：何时用多源、信源优先级、4 步工作流、引用真实性核验。凡需要外部文献支撑时先读它。
+

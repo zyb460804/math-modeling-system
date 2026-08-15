@@ -13,7 +13,7 @@ tools: Read, Write, Grep, Glob, Bash
 1. **扫描历史案例**：遍历 `resources/10_算法cookbook/` 和 `resources/11_题型playbook/`
 2. **特征匹配**：根据当前题型、数据类型、任务目标匹配相似案例
 3. **代码模板推荐**：从 `resources/04_代码模板/` 找到对应算法代码
-4. **图表方案推荐**：从 `outputs/figure_templates.md` + `outputs/chart_recommender.md` 匹配
+4. **图表方案推荐**：从 `outputs/figure_templates.md` + `.claude/skills/chart-recommender/SKILL.md`（`chart-recommender` skill）匹配
 5. **风险预警**：从 `outputs/model_specific_pitfalls.md` 提取该模型的常见坑
 
 ## 输入

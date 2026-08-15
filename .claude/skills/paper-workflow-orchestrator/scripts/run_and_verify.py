@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
@@ -245,17 +246,15 @@ def main():
     configure_utf8()
     root = get_project_root()
 
-    # 解析参数
-    target_question = None
-    target_stage = None
-    verify_only = False
-    for i, arg in enumerate(sys.argv[1:]):
-        if arg == "--question" and i + 2 < len(sys.argv):
-            target_question = sys.argv[i + 2]
-        elif arg == "--stage" and i + 2 < len(sys.argv):
-            target_stage = sys.argv[i + 2]
-        elif arg == "--verify-only":
-            verify_only = True
+    # 解析参数（v4.9.3 argparse 化：--help/-h 不再触发真主逻辑；接口与原手写解析兼容）
+    parser = argparse.ArgumentParser(description="自动运行所有子问题代码并验证结果")
+    parser.add_argument("--question", default=None, help="只处理指定子问题（如 Q1）")
+    parser.add_argument("--stage", default=None, help="只运行指定阶段（data / model / plot）")
+    parser.add_argument("--verify-only", action="store_true", help="只验证，不运行")
+    args = parser.parse_args()
+    target_question = args.question
+    target_stage = args.stage
+    verify_only = args.verify_only
 
     # 加载 problem_analysis.json 获取子问题列表
     analysis_file = root / "paper_output" / "step1" / "problem_analysis.json"

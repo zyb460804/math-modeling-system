@@ -133,4 +133,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description="论文级图表模板生成器：按 visualization_plan.json 生成论文级图表样板并更新 figure_index.json。"
+    ).parse_args()
     raise SystemExit(main())

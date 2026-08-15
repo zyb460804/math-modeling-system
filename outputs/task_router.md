@@ -1,6 +1,8 @@
 # outputs/task_router.md
 
-> **v3.4 统一入口版 | 2026-06-21** | 统一索引见 `outputs/INDEX.md`
+> **v3.5 | 2026-08-15**（v4.8/v4.9 口径同步） | 统一索引见 `outputs/INDEX.md`
+
+> ⚠️ **v4.8 归档公告**：`prompts/` 32 个文件已全部移入 `prompts/_archive/`，主路径不再使用。本文所有形如 `prompts/XX_*.md` 的路径，实际位置均为 `prompts/_archive/XX_*.md`，仅作回退参考；正常任务一律走 Skill 统一入口（见 §二）。
 
 > 用于把”用户当前任务”快速路由到正确的 skill、prompts、outputs 和 deliverables，避免临时发挥和错调工具。
 
@@ -40,6 +42,9 @@
 | `algorithm-runner` | 运行算法、执行代码 | 执行已有算法模板（输出末节自动引 code） | `algorithm-runner` |
 | `submit` | 生成提交包 | 最终比赛提交包（自动判断阶段；输出末节说明与 solution-package-builder 的区别） | `submit` |
 | AIGC降重 | 降AI味、降重、去AI检测 | 默认走 humanizer-zh-academic（14种AI模式+7项硬约束）；备选 aigc-reduce | `humanizer-zh-academic` |
+| `blind-panel`（v4.1） | 盲评、盲审、模拟评委、校准打分、panel | 3 座独立盲评 + 20 分冲突仲裁 + 真实稀缺性校准 | `blind-panel` |
+| `defense-ppt-builder-zh`（v4.8） | 答辩PPT、生成PPT、中文答辩幻灯片、国赛答辩 PPT | 国赛中文答辩 .pptx（与 `/defense` 衔接：defense 出问答库，本 skill 出 PPT 文件） | `defense-ppt-builder-zh` |
+| 模式切换（v4.9 默认 championship） | 切 fast / 这次用 standard / 切回默认 | orchestrator 模式切换（默认 championship，escape hatch 才降级） | `paper-workflow-orchestrator` |
 
 ---
 
@@ -103,12 +108,14 @@
 | 第二层 | `completeness-auditor` | 审查文件/报告/产物齐全 | `qa/completeness_audit_report.json` |
 | 第三层 | `quality-assurance-auditor` | 工作流完整性+反编造 | `qa/evidence_gate_report.json` |
 
-### 传统 Prompt 路由（轨道 B 备选）
+### 传统 Prompt 路由（轨道 B 备选，v4.8 已全部归档）
 
-| 当前任务 | 典型输入 | 主入口 prompt | 必读 outputs | 默认产出 |
+> ⚠️ 下表"主入口 prompt"列的全部 `prompts/XX.md` 现位于 `prompts/_archive/XX.md`，仅回退参考；正常任务走 §二统一入口。
+
+| 当前任务 | 典型输入 | 主入口 prompt（已归档） | 必读 outputs | 默认产出 |
 |---|---|---|---|---|
 | 扫一遍资料 | 一批目录、资料包、历史文件 | `prompts/01_full_scan.md` | `outputs/file_map.md`、`outputs/asset_registry.md` | 更新文件地图与优先级 |
-| 新增材料入库 | 新增 PDF/DOCX/代码/模板/案例资料 | `prompts/01_full_scan.md`、`prompts/02_extract_cards.md` | `outputs/material_inventory.md`、`outputs/extracted_document_text/`、`outputs/extracted_pdf_text/`、`outputs/_reports/award_pdf_extraction_report.md`、`outputs/_reports/award_pdf_ocr_report.md`、`outputs/extracted_material_synthesis.md`、`outputs/code_asset_index.md` | 形成可检索文本层、代码索引和回灌清单 |
+| 新增材料入库 | 新增 PDF/DOCX/代码/模板/案例资料 | `prompts/01_full_scan.md`、`prompts/02_extract_cards.md` | `outputs/material_inventory.md`、`outputs/_reports/`（award_pdf_extraction_report / award_pdf_ocr_report / document_extraction_log）、`outputs/extracted_material_synthesis.md`、`outputs/code_asset_index.md` | 形成可检索文本层、代码索引和回灌清单（`extracted_document_text/`、`extracted_pdf_text/` 目录已不存在，勿再引用） |
 | 抽卡建库 | 已扫描的资料 | `prompts/02_extract_cards.md` | `outputs/knowledge_base.md` | 更新知识卡片 |
 | 知识点更新 | 新增规则、资料、提示词、算法、案例经验 | `prompts/29_update_knowledge_assets.md` | `outputs/knowledge_update_workflow.md`、`outputs/asset_registry.md`、`outputs/prompts_outputs_call_map.md` | 分类、回灌、同步、登记和待确认清单 |
 | 建规则库 | 已有抽卡结果 | `prompts/03_build_rules.md` | `outputs/method_matching.md`、`outputs/writing_templates.md` 等 | 更新母库 |
@@ -153,15 +160,15 @@
 
 | 合同类型 | 模板位置 | 用途 |
 |---------|---------|------|
-| 模型合同 | `paper-workflow-orchestrator/references/model-contract-template.md` | 前置合同：核心结论+证据链+反冗余+交付规格 |
-| 图表合同 | `paper-workflow-orchestrator/references/figure-contract-template.md` | 图表合同：结论+面板证据+灰度安全+色盲无障碍 |
+| 模型合同 | `.claude/skills/paper-workflow-orchestrator/references/model-contract-template.md` | 前置合同：核心结论+证据链+反冗余+交付规格 |
+| 图表合同 | `.claude/skills/paper-workflow-orchestrator/references/figure-contract-template.md` | 图表合同：结论+面板证据+灰度安全+色盲无障碍 |
 
 ### 门控架构（G1-G6）
 
 | 门控 | 时机 | 要求 | 参考文档 |
 |------|------|------|---------|
-| G1 | 预检通过 | problem_files 非空 | `paper-workflow-orchestrator/references/gate-system.md` |
-| G2 | PoC验证 | 每个候选方法有≤30行PoC | `paper-workflow-orchestrator/references/poc-validation-gate.md` |
+| G1 | 预检通过 | problem_files 非空 | `.claude/skills/paper-workflow-orchestrator/references/gate-system.md` |
+| G2 | PoC验证 | 每个候选方法有≤30行PoC | `.claude/skills/paper-workflow-orchestrator/references/poc-validation-gate.md` |
 | G2.5 | 方法选择后 | 用户填写选择理由（≥50字） | `decision-logger` skill |
 | G3 | 证据门禁 | 所有产物通过QA | `quality-assurance-auditor` |
 | G4 | 结果确认 | 用户确认结果合理性 | `decision-logger` skill |
@@ -169,9 +176,11 @@
 | G5 | 格式门禁 | 论文格式检查通过 | `paper-formal-writer` |
 | G6 | 最终门禁 | 三审计层全部PASS | `consistency-auditor` + `completeness-auditor` + `quality-assurance-auditor` |
 
+> **门禁编号消歧（2026-08-15 审计）**：上表 G1-G6 为阶段门系列（与 `paper-workflow-orchestrator/references/gate-system.md` 对应，其 G3=CODE_REVIEWED、G5=PAPER_SECTION_READY、G6=AUDIT_LAYER_PASSED）。而 `tools/quality_gate/final_gate_runner.py` 终检链另用一套子门编号：G4.6 自证 / G4.7 实物 / G4.8 数字 / G4.9 公式 / G4.10 图片嵌入，并把证据门、skill 调用门、盲评门标为 "G5 ××门"（`skill_invocation_gate.py` 内部细分 G5.1-G5.9）。两套编号历史叠加、"G5"一词三义，引用时一律以脚本/文档全名消歧，勿只写 G5。
+
 ### 数字冻结机制
 
-参考：`paper-workflow-orchestrator/references/frozen-numbers-convention.md`
+参考：`.claude/skills/paper-workflow-orchestrator/references/frozen-numbers-convention.md`
 
 **3步解冻-修改-重冻**：
 1. 解冻：从 `frozen_numbers.json` 读取当前冻结值
@@ -182,33 +191,33 @@
 
 | 资源 | 路径 | 用途 |
 |------|------|------|
-| 95+场景选型矩阵 | `model-selector/references/model-selection-matrix.md` | 场景×问题决策矩阵 |
-| 问题分解法 | `model-selector/references/problem-decomposition.md` | 12型问题分类+信号词+I/O规范 |
-| 端到端Playbook | `model-selector/references/playbooks/` (12个) | 调度/物理/ML/评价/博弈/路径/数据/几何/网络/环境/政策 |
+| 95+场景选型矩阵 | `.claude/skills/model-selector/references/model-selection-matrix.md` | 场景×问题决策矩阵 |
+| 问题分解法 | `.claude/skills/model-selector/references/problem-decomposition.md` | 12型问题分类+信号词+I/O规范 |
+| 端到端Playbook | `.claude/skills/model-selector/references/playbooks/` (12个) | 调度/物理/ML/评价/博弈/路径/数据/几何/网络/环境/政策 |
 
 ### 领域知识库（8大Cookbook）
 
 | Cookbook | 路径 | 覆盖算法 |
 |---------|------|---------|
-| 优化 | `model-code-and-result-generator/references/cookbook-optimization.md` | GA/PSO/SA/LP/DP |
-| 机器学习 | `model-code-and-result-generator/references/cookbook-ml.md` | XGBoost/RF/SVM/NN |
-| 评价 | `model-code-and-result-generator/references/cookbook-evaluation.md` | TOPSIS/AHP/熵权/模糊 |
-| 机理 | `model-code-and-result-generator/references/cookbook-mechanistic.md` | 传热/ODE/几何/光学 |
-| 统计 | `model-code-and-result-generator/references/cookbook-statistical.md` | 假设检验/ANOVA/蒙特卡洛/贝叶斯 |
-| 网络 | `model-code-and-result-generator/references/cookbook-network.md` | 图论/网络流/中心性 |
-| 聚类 | `model-code-and-result-generator/references/cookbook-clustering.md` | 层次/K-Means/DBSCAN/GMM |
-| 博弈 | `model-code-and-result-generator/references/cookbook-game-theory.md` | 纳什/演化/Stackelberg |
+| 优化 | `.claude/skills/model-code-and-result-generator/references/cookbook-optimization.md` | GA/PSO/SA/LP/DP |
+| 机器学习 | `.claude/skills/model-code-and-result-generator/references/cookbook-ml.md` | XGBoost/RF/SVM/NN |
+| 评价 | `.claude/skills/model-code-and-result-generator/references/cookbook-evaluation.md` | TOPSIS/AHP/熵权/模糊 |
+| 机理 | `.claude/skills/model-code-and-result-generator/references/cookbook-mechanistic.md` | 传热/ODE/几何/光学 |
+| 统计 | `.claude/skills/model-code-and-result-generator/references/cookbook-statistical.md` | 假设检验/ANOVA/蒙特卡洛/贝叶斯 |
+| 网络 | `.claude/skills/model-code-and-result-generator/references/cookbook-network.md` | 图论/网络流/中心性 |
+| 聚类 | `.claude/skills/model-code-and-result-generator/references/cookbook-clustering.md` | 层次/K-Means/DBSCAN/GMM |
+| 博弈 | `.claude/skills/model-code-and-result-generator/references/cookbook-game-theory.md` | 纳什/演化/Stackelberg |
 
 ### 写作增强
 
 | 资源 | 路径 | 用途 |
 |------|------|------|
-| Anti-AI检测指南 | `paper-formal-writer/references/anti-ai-detection-guide.md` | 8类AI痕迹+禁用词表+替换策略 |
-| 4轮自审框架 | `paper-formal-writer/references/four-round-self-review.md` | Claim-Evidence→结构→表达→格式 |
-| 章节架构 | `paper-formal-writer/references/section-architecture.md` | 摘要6要素/引言5要素/结果证据阶梯 |
-| 证据金字塔 | `paper-formal-writer/references/evidence-pyramid.md` | 4层证据金字塔 |
-| 常用短语库 | `paper-formal-writer/references/common-phrases.md` | 中英双语学术短语库（10章节） |
-| 文献综述指南 | `paper-formal-writer/references/literature-review-guide.md` | T1/T2/T3信源路由+搜索4层法 |
+| Anti-AI检测指南 | `.claude/skills/paper-formal-writer/references/anti-ai-detection-guide.md` | 8类AI痕迹+禁用词表+替换策略 |
+| 4轮自审框架 | `.claude/skills/paper-formal-writer/references/four-round-self-review.md` | Claim-Evidence→结构→表达→格式 |
+| 章节架构 | `.claude/skills/paper-formal-writer/references/section-architecture.md` | 摘要6要素/引言5要素/结果证据阶梯 |
+| 证据金字塔 | `.claude/skills/paper-formal-writer/references/evidence-pyramid.md` | 4层证据金字塔 |
+| 常用短语库 | `.claude/skills/paper-formal-writer/references/common-phrases.md` | 中英双语学术短语库（10章节） |
+| 文献综述指南 | `.claude/skills/paper-formal-writer/references/literature-review-guide.md` | T1/T2/T3信源路由+搜索4层法 |
 
 ---
 
@@ -345,10 +354,10 @@
 
 以后只要任务还不明确，先走：
 
-1. `prompts/00_route_task.md`
+1. `prompts/_archive/00_route_task.md`（v4.8 已归档，仅回退）
 2. 看 `outputs/task_router.md`
 3. 判断当前是 `demo` 还是 `real_case`
-4. 再进入专项 prompt
+4. 再进入专项 prompt（`prompts/_archive/`）或 Skill 统一入口
 
 这样可以减少四类常见错误：
 
@@ -409,37 +418,37 @@
 
 | 触发词 | 路由到 | 产出 |
 |--------|--------|------|
-| 提取表格 / PDF 表格 | `data-cleaning-and-visualization/scripts/extract_pdf_tables.py` | `paper_output/code/data/table_*.csv` + tables_index.json |
-| 公式 OCR / 提取公式 | `problem-doc-model-selector/scripts/extract_formulas_ocr.py` | `paper_output/code/formulas_ocr.json` |
-| 拉宏观数据 / 经济数据 | `authoritative-data-harvester/scripts/akshare_fetch.py` | `paper_output/code/data/<接口>.csv` + _meta.json |
+| 提取表格 / PDF 表格 | `.claude/skills/data-cleaning-and-visualization/scripts/extract_pdf_tables.py` | `paper_output/code/data/table_*.csv` + tables_index.json |
+| 公式 OCR / 提取公式 | `.claude/skills/problem-doc-model-selector/scripts/extract_formulas_ocr.py` | `paper_output/code/formulas_ocr.json` |
+| 拉宏观数据 / 经济数据 | `.claude/skills/authoritative-data-harvester/scripts/akshare_fetch.py` | `paper_output/code/data/<接口>.csv` + _meta.json |
 
 ### 建模 / 调参阶段
 
 | 触发词 | 路由到 | 产出 |
 |--------|--------|------|
-| 超参调优 / 调参 | `model-code-and-result-generator/scripts/optuna_tune.py` | `paper_output/code/tune/best_params.json` + 优化历史图 |
-| G4.6 自证门 | `model-code-and-result-generator/scripts/verification_template.py` + `qa-auditor/scripts/verify_gate.py` | `verifications/verify_*.py` 全 PASS |
-| 模型可解释性 / SHAP | `feature-engineering/scripts/shap_explain.py` | `paper_output/figures/shap/*.png` + importance.json |
-| **跑 MATLAB / ODE/曲线拟合/优化（MATLAB 强项）** | `matlab-model-code-generator/scripts/matlab_runner.py` + 3 模板 | `paper_output/code/matlab/run_report.json` + png/mat/json |
+| 超参调优 / 调参 | `.claude/skills/model-code-and-result-generator/scripts/optuna_tune.py` | `paper_output/code/tune/best_params.json` + 优化历史图 |
+| G4.6 自证门 | `.claude/skills/model-code-and-result-generator/scripts/verification_template.py` + `.claude/skills/quality-assurance-auditor/scripts/verify_gate.py` | `verifications/verify_*.py` 全 PASS |
+| 模型可解释性 / SHAP | `.claude/skills/feature-engineering/scripts/shap_explain.py` | `paper_output/figures/shap/*.png` + importance.json |
+| **跑 MATLAB / ODE/曲线拟合/优化（MATLAB 强项）** | `.claude/skills/matlab-model-code-generator/scripts/matlab_runner.py` + 3 模板 | `paper_output/code/matlab/run_report.json` + png/mat/json |
 
 ### 画图 / 写作阶段
 
 | 触发词 | 路由到 | 产出 |
 |--------|--------|------|
-| 期刊风图表 / 图表美化 | `math-figure/scripts/journal_style.py` | 示例图 + 样式名清单 |
-| 编译 LaTeX | `paper-formal-writer/scripts/compile_latex.py` | `paper_output/latex/build/*.pdf` |
+| 期刊风图表 / 图表美化 | `.claude/skills/math-figure/scripts/journal_style.py` | 示例图 + 样式名清单 |
+| 编译 LaTeX | `.claude/skills/paper-formal-writer/scripts/compile_latex.py` | `paper_output/latex/build/*.pdf` |
 | Typst 渲染 | `typst-renderer` skill（inject_typst.py） | `paper_output/typst/main.typ` → `final_paper.pdf` |
 | 编辑 Word / Word 公式 | `docx-editor-cn` skill | 原生 OMML 公式 / XML 局部编辑 |
-| 保留格式降重 | `aigc-reduce/scripts/replace_docx_preserve_format.py` | 格式不变的降重 .docx |
+| 保留格式降重 | `.claude/skills/aigc-reduce/scripts/replace_docx_preserve_format.py` | 格式不变的降重 .docx |
 
 ### 验收 / 交付阶段
 
 | 触发词 | 路由到 | 产出 |
 |--------|--------|------|
-| 流水线状态 / 返工 | `qa-auditor/scripts/pipeline_manager.py` | `paper_output/state/pipeline.json` |
-| 数值合理性 / inf nan | `qa-auditor/scripts/check_numeric_sanity.py` | `qa/numeric_sanity_report.json` |
-| 报告新鲜度 | `context-memory-keeper/scripts/freshness_check.py` | STALE 报告清单 |
-| 安全检查 / 密钥扫描 | `consistency-auditor/scripts/security_check.py` | 终端报告（git commit 前自动拦截） |
+| 流水线状态 / 返工 | `.claude/skills/quality-assurance-auditor/scripts/pipeline_manager.py` | `paper_output/state/pipeline.json` |
+| 数值合理性 / inf nan | `.claude/skills/quality-assurance-auditor/scripts/check_numeric_sanity.py` | `qa/numeric_sanity_report.json` |
+| 报告新鲜度 | `.claude/skills/context-memory-keeper/scripts/freshness_check.py` | STALE 报告清单 |
+| 安全检查 / 密钥扫描 | `.claude/skills/consistency-auditor/scripts/security_check.py` | 终端报告（git commit 前自动拦截） |
 | 查优秀论文 / O 奖检索 | `award-paper-rag` skill（retrieve 离线 / chat 需 key） | 相关章节 top-k |
 
 ### 路由优先级

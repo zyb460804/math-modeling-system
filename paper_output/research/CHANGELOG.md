@@ -1,4 +1,4 @@
-# 数学建模生产系统 CHANGELOG（v4.0 → v4.6）
+# 数学建模生产系统 CHANGELOG（v4.0 → v4.9）
 
 > 一处看全系统的演进。每轮的定位、来源、新增、修改、报告链接。
 > 最新在前。完整系统规则见 [CLAUDE.md](../../CLAUDE.md)，统一索引见 [outputs/INDEX.md](../../outputs/INDEX.md)。
@@ -21,10 +21,19 @@ v4.4 (2026-07-25) 系统整理+实测验证——单系统成型：双系统归�
 v4.5 (2026-07-26) 全面体检+断链清零——8 维度审计 37 发现全处置：P0 门禁修复/11 缺失脚本落地/QA 去硬编码/环境补齐
    ↓
 v4.6 (2026-07-30) 学术方法论融合——usail-hkust/LLM-MM-Agent (NeurIPS 2025)：HMML 分层方法库+actor-critic 选模+美赛分题策略+scikit-opt 桥接
+   ↓
+v4.7 (2026-08) 图片嵌入链路加固——G4.10 图片嵌入门（image_embed_check.py）+ pandoc/md 纯文字"见图N"不嵌图坑修复
+   ↓
+v4.8 (2026-08-02) 第四档 skill 大扫除——归档 14 个 skill、消化方法论、新建 defense-ppt-builder-zh、prompts/ 全量归档，67→54
+   ↓
+v4.9 (2026-08-03) championship 默认 + 交付链 P0（OMML 公式渲染/resolve_path/figure_index）+ pipeline_runner 一键调度 + 门禁三轮加固（2026-08-15 波次）
 ```
 
 | 版本 | 定位 | 新 Skill | 新脚本 | 关键能力 |
 |------|------|---------|--------|---------|
+| **v4.9** | 用户偏好固化 + 交付链 P0 + 一键调度 | 0 | +1（pipeline_runner） | championship 默认（escape hatch 才降级）/ format_formal_docx 跨 skill 复用 latex_to_omml / resolve_path 多候选 / pipeline_runner 9 阶段接力 / 门禁三轮加固（fail-closed + verdict 真消费 + blind_panel_schema 两链同口径） |
+| **v4.8** | 第四档 skill 大扫除 | +1（defense-ppt-builder-zh）−14（归档） | +0（+7 references） | 归档 14 skill（9 Nature + 5 低频）/ 67→54 / prompts 32 文件全量归档 / G5 门禁矩阵 v1.1 / settings 精简 |
+| **v4.7** | 图片嵌入链路加固 | 0 | +1（image_embed_check） | G4.10 图片嵌入门：Markdown `![](path)` 计数 vs Word `word/media/*` 实际内嵌数，防"见图N"纯文字漏检 |
 | **v4.6** | 学术方法论融合 | 0 | 0（+8 参考文档） | HMML 97 方法分层库 / actor-critic 选模 / 美赛 A-F 分题策略 / scikit-opt 7 启发式桥接 |
 | **v4.5** | 全面体检 + 断链清零 | 0 | +11（补落地） | P0 图表门禁修复 / 11 断链脚本实现 / QA 配置驱动化 / RAG 链路解阻 / docx 公式链环境补齐 / 文档失实 10 处修正 |
 | **v4.4** | 系统整理 + 实测验证 | 0 | 0 | 双系统→单系统归档 / RAG CSV 去重 254→251 + 索引 rebuild 6863 节点 / 路由 20+ 处更新 / 门禁实测跑通 |
@@ -33,7 +42,64 @@ v4.6 (2026-07-30) 学术方法论融合——usail-hkust/LLM-MM-Agent (NeurIPS 2
 | **v4.1** | 评分与图表质量 | +1（blind-panel） | +5（修正器/反馈层） | 盲评 3 座 + 20 分冲突 / figqa 碰撞门 / dim_weights 题型加权 / L1-L4 反馈 / fast-standard-championship 3 模式 |
 | **v4.0** | 地基（合同 + 门控 + 知识库） | +8（社区） | 22 算法模板 | Model/Figure Contract / G1-G6 门控 / 95+ 选型矩阵 / 8 Cookbook / 12 Playbook / Anti-AI 写作 / 100+ O 奖库 |
 
-累计：**67 skill / 30+ 新脚本 / 375 Typst 模板 / 81MB RAG 索引 / 6 数学 MCP 文档 / HMML 97 方法分层库**。
+累计（截至 v4.9）：**54 个 active skill（v4.8 大扫除后；另有 14 个归档于 `.claude/skills/_archive/`）/ 30+ 新脚本 / 34 套 Typst 赛事模板（372 模板文件）/ 81MB RAG 索引 / 6 数学 MCP 文档 / HMML 97 方法分层库**。
+
+---
+
+## v4.9 — championship 默认 + 交付链 P0 + pipeline_runner（2026-08-03，加固波次至 2026-08-15）
+
+**定位**：用户偏好固化为默认模式；修复交付链三处 P0；把 orchestrator 路由逻辑代码化为一键调度器。
+
+**championship 默认（用户偏好固化）**：
+- 每次解题默认走 3 座盲评 Panel + figqa 碰撞门 + 4 层反馈 L1-L4，不再按 deadline 自动降级（v4.1 原为自动推荐）
+- escape hatch 保留：用户说"切 fast"/"这次用 standard"才偏离；deadline <6h 只"建议"降级、确认才改
+- 落点：`paper-workflow-orchestrator/SKILL.md` 运行模式段重写 + CLAUDE.md 7 处同步（头部摘要/触发词表/完整流水线/交付门禁/主轨道流水线/口令映射/v4.1 触发词表）
+
+**交付链 P0 修复（三件）**：
+- `paper-formal-writer/scripts/format_formal_docx.py` 公式渲染链重写：**真 import 跨 skill 复用** `docx-editor-cn/scripts/formula.py::latex_to_omml`（`_locate_docx_editor_scripts()` 从脚本文件位置逐级上溯定位，不依赖 cwd）；480 个 `$...$`/`$$...$$` 全转 Word 原生 OMML，覆盖 body/center/heading/list/表格 cell 5 路径；失败退化 Cambria Math 纯文本并计 `_OMML_STATS`（DEGRADED 可见）
+- `resolve_path` 多候选路径查找：相对路径依次尝试 `paper_output/` → 项目根（修复图片路径解析，6 张图全嵌入）；含绝对路径/`..`/越界/扩展名白名单四重安全门
+- `paper_output/figure_index.json` / `tasks.json` 补齐（证据门禁 PASS）
+
+**pipeline_runner 一键调度（`tools/quality_gate/pipeline_runner.py`）**：
+- 9 阶段状态机（S1 审题 / S2 选模+G2.5 / S3 代码 / S3b 自证 G4.6 / S4 结果+G4.5 / S5 证据门 / S6 写作 / S7 格式门 / S8 终检），对齐 pipeline_manager 的 STAGE_ORDER
+- 脚本型阶段（S3b/S5/S7/S8）自动 subprocess，PASS 才推进；认知型阶段输出 AGENT_HANDOFF（退出码 2 等 Agent 接力）；produces 文件齐备的 agent 阶段自动推进
+- championship 接线：check_numeric_sanity → S5、freshness_check → S8 前、blind_panel_report.json 存在性 → S8 产物门；figqa 为 live 检测不硬接脚本（S4/S6 handoff 提示）
+
+**门禁三轮加固（2026-08 波次，commits 4de1292 / 615d99f / 2b938af）**：
+- 第一轮（4de1292）：门禁 fail-closed（checker 缺失即 FAIL，显式 skip 旗标留痕）、审批门强制、密钥 redact
+- 第二轮（615d99f）：B7 审批消费错位修复 + verdict 真消费（枚举 pass|refine|block 且仅 pass 放行）+ 旧门禁误报雷区清零
+- 第三轮（2b938af）：终检 verdict 真消费 + 幽灵条目 CRITICAL + freshness 真接线 + 锚定统一（`_project_root.py::find_project_root` 替代 Path.cwd，format_formal_docx 等受益）
+- 脚本侧自我标注版本：pipeline_runner v4.9.1-v4.9.3、final_gate_runner v4.10.1（`blind_panel_schema.py` 两链共用盲评校验；G4.8 双口径+阈值可配；SKIP≠PASS 三态展示）
+
+**报告**：本轮无独立融合报告；来源为本 CHANGELOG 回填 + CLAUDE.md v4.9 摘要 + 脚本 docstring 溯源（2026-08-15 审计补录）。
+
+---
+
+## v4.8 — 第四档 skill 大扫除（2026-08-02）
+
+**定位**："能转化的转化，不能的删除"。skill 总数 67→54，第四档"几乎不触发"从 16 个→2 个（typst-renderer + docx-editor-cn 保留为可选交付链路）。
+
+**归档 14 个 skill** → `.claude/skills/_archive/`（git mv 可恢复）：
+- 9 个 Nature：nature-polishing / nature-writing / nature-figure / nature-paper2ppt / nature-reader / nature-academic-search / nature-citation / nature-data / nature-response
+- 5 个低频：academic-paper-strategist、academic-paper-composer（哲学论文，与竞赛无关）、academic-defense-pptx（并入新 skill）、csv-data-summarizer、result-validator
+
+**方法论精华 100% 消化**：6 份新 references（ai-traffic-light / english-academic-writing / figure-evidence-layering / bilingual-reader-protocol / multi-source-search / result-validation-rules）+ quick-eda-protocol + 1 个新 references 整合 csv 能力。
+
+**新建 1 个 skill**：`defense-ppt-builder-zh`（国赛中文答辩 PPT 生成器，融合 nature-paper2ppt + academic-defense-pptx）。
+
+**配套**：G5 门禁矩阵 v1.1（`tools/quality_gate/skill_applicability_matrix.json` 含 archived_skills 清单）；settings.json 删 14 个注册 + 添 defense-ppt-builder-zh + blind-panel；`prompts/` 32 个文件全量归档至 `prompts/_archive/`（实测 0 调用，100% 有 skill 替代）。
+
+**报告**：`outputs/nature_skills_bridge.md` v3.0 + `prompts/README.md` 归档公告。
+
+---
+
+## v4.7 — 图片嵌入链路加固（2026-08）
+
+**定位**：堵住"md 写'见图N'纯文字、Word 实际无图"的交付漏洞。
+
+**新增 G4.10 图片嵌入门**：`tools/quality_gate/image_embed_check.py`——比对 Markdown `![](path)` 语法引用数与 Word 解包后 `word/media/*` 实际内嵌图数；pandoc 链路下 md 里写"见图N"纯文字不会嵌图（必须 `![](path)` 相对路径 + 正确工作目录），旧格式门禁不查此项。
+
+> 溯源说明：本节依据 `paper-workflow-orchestrator/SKILL.md` 阶段路由表（G4.10 标注 v4.7）与 `final_gate_runner.py` 八门清单回填（2026-08-15 审计补录），无独立融合报告。
 
 ---
 
@@ -222,11 +288,16 @@ v4.0 地基      ─┐
 v4.1 评分质量  ─┤→  共同构成完整生产系统
 v4.2 交付纪律 ─┤   每轮只加，不替换骨架
 v4.3 单点提效 ─┘
+v4.4-v4.5 系统整理与体检（收敛为单系统 + 断链清零）
+v4.6-v4.7 方法论与交付链增补（HMML / G4.10）
+v4.8 收缩（归档 14 + prompts 下线，67→54）
+v4.9 默认冲奖模式 + 一键调度 + 门禁加固
 ```
 
 - **v4.0/v4.1** → 评分与图表质量（合同/门控/盲评/选型）
 - **v4.2** → 交付链路与工程纪律（Typst/GitOps/自证/RAG）
 - **v4.3** → 单点工具提效（PDF/OCR/SHAP/Optuna/数据）
+- **v4.8/v4.9** → 默认行为固化（championship）与调度/门禁收敛
 
 ## 待决策 / 未完成项
 
@@ -238,3 +309,5 @@ v4.3 单点提效 ─┘
 | MiKTeX/TeX Live（LaTeX 编译分支） | v4.5 | 未装（用户选择暂不装；Typst 分支可替代） |
 | resources 32.8GB 重复删除 | v4.5 | 已校验实锤，命令备于 `resources/03_方法算法/README_国赛C题合集已去重.md` 待手动执行 |
 | Tier 2（Mermaid/GraphRAG/Streamlit） | v4.3+ | 待用户决策 |
+| G5.5 humanizer 阈值口径统一（skill_invocation_gate 生效值 40 vs pipeline_runner S6 handoff 文案 58） | v4.9 | 待统一（skill_invocation_gate.py 内 TODO H-12 已标注） |
+| 门禁编号"G5"一词三义（阶段门 G5 / 终检链 G5 ××门 / G5.1-G5.9）统一或别名化 | v4.9 | 待决策（2026-08-15 审计已在各路由文档加消歧注） |

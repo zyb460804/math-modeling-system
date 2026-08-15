@@ -6,6 +6,7 @@ gated by preflight_check.py and the orchestrator skill.
 """
 from __future__ import annotations
 
+import argparse
 import sys
 
 
@@ -23,6 +24,11 @@ def configure_utf8_stdio() -> None:
 
 def main() -> int:
     configure_utf8_stdio()
+    # v4.9.3：argparse 化，--help/-h 只打印本说明，不打印迁移提示正文（本脚本本身无副作用，统一口径）
+    parser = argparse.ArgumentParser(
+        description="[DEPRECATED] run_all 迁移提示：不执行任何流程，只指引正式入口（预检 + orchestrator）"
+    )
+    parser.parse_args()
     print("[DEPRECATED] run_all.py 不再作为正式入口，本脚本不执行任何流程。")
     print()
     print("正式赛题请按以下顺序：")

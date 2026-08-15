@@ -1,3 +1,4 @@
+import argparse
 import os
 import subprocess
 import sys
@@ -23,6 +24,11 @@ def run_step(args, **kwargs):
 
 def main() -> int:
     configure_utf8_stdio()
+    # v4.9.3：argparse 化，--help/-h 不再触发真实链路（原版会直接跑全流程写 paper_output/）
+    parser = argparse.ArgumentParser(
+        description="Quickstart / 安装冒烟测试：只验证链路，产物写入 paper_output/quickstart/，不代表正式论文"
+    )
+    parser.parse_args()
     root = Path.cwd().resolve()
     os.chdir(root)
 

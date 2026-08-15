@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -358,6 +359,14 @@ def generate_plotting_code(question_id: str, question: dict) -> str:
 
 def main():
     configure_utf8()
+    # 解析参数（v4.9.3 argparse 化：--help/-h 不再触发生成逻辑；接口与原手写解析兼容）
+    parser = argparse.ArgumentParser(description="代码工厂：根据 problem_analysis.json 和 model_route.json 生成赛题专用代码")
+    parser.add_argument("--question", default=None, help="只生成指定子问题（如 Q1）的代码")
+    parser.add_argument("--stage", default=None, help="只生成指定阶段（data / model / plot）代码")
+    args = parser.parse_args()
+    target_question = args.question
+    target_stage = args.stage
+
     root = get_project_root()
 
     analysis = load_json(root / "paper_output" / "step1" / "problem_analysis.json")
@@ -378,14 +387,6 @@ def main():
     if not questions:
         print("[ERROR] problem_analysis.json 中没有子问题")
         return 1
-
-    target_question = None
-    target_stage = None
-    for i, arg in enumerate(sys.argv[1:]):
-        if arg == "--question" and i + 2 < len(sys.argv):
-            target_question = sys.argv[i + 2]
-        elif arg == "--stage" and i + 2 < len(sys.argv):
-            target_stage = sys.argv[i + 2]
 
     code_dir = root / "paper_output" / "code"
     generated = 0

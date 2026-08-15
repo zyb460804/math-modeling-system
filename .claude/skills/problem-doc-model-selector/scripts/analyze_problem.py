@@ -450,4 +450,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description="赛题结构化分析：解析 problem_files/ 生成 paper_output/step1/problem_analysis.json 与配套输出。"
+    ).parse_args()
     raise SystemExit(main())

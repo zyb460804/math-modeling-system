@@ -63,7 +63,7 @@ python "<file_name>" 2>&1
 ## 7. 下游交接
 
 - 测试通过 → `model-code-and-result-generator` 或 `paper-formal-writer`
-- 测试失败 → 返回代码生成环节修复（`model-code-and-result-generator` 或 `prompts/19_generate_code.md`）
+- 测试失败 → 返回代码生成环节修复（`model-code-and-result-generator` 或 `.claude/skills/code/SKILL.md` 的 `code` skill；旧 `prompts/19_generate_code.md` 已于 v4.8 归档至 `prompts/_archive/`）
 - 产出文件 → `paper_output/results/` 或 `paper_output/figures/`
 
 ## 8. 失败处理

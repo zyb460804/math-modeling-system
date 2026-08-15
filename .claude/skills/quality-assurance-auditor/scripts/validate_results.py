@@ -15,6 +15,14 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Windows GBK 控制台兼容：强制 stdout/stderr 走 utf-8（与同目录其余门禁脚本同款处理，
+# 旧版中文报告文案在 cp936 控制台重定向时乱码不可读）
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 
 def load_json(path: str) -> dict:
     """加载 JSON 文件。"""

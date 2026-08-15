@@ -113,4 +113,12 @@ def main():
         time.sleep(random.uniform(1, 2))
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description=(
+            "权威数据抓取器：按 scripts/config.json 任务清单下载/抓取外部权威数据"
+            "到 crawled_data/（direct_download/scrape_tables/manual_search）。"
+        )
+    ).parse_args()
     main()

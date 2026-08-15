@@ -1,12 +1,12 @@
 # Nature Skills 归档公告
 
 > **v3.0 | 2026-08-02**
-> **变更**：9 个 Nature 学术 skill 全部归档到 `.claude/skills/_archive/`。方法论精华已抽取到主流程 references/，能力未丢失。
+> **变更**：v4.8 共归档 **14 个 skill** 到 `.claude/skills/_archive/`——9 个 Nature 学术 skill（见 §一）+ 5 个低频 skill（见 §一·bis）。方法论精华已抽取到主流程 references/，能力未丢失。
 > **历史**：v2.0（2026-05-31）曾将 3 个 nature skill（figure/paper2ppt/writing）作为可选接入。v3.0 改为"全部消化进主流程"，不再保留独立 skill 入口。
 
 ---
 
-## 一、归档清单（9 个 → 全部归档）
+## 一、归档清单——Nature 部分（9 个）
 
 | 原 skill | 归档位置 | 方法论精华去向 | 是否新建文档 |
 |---------|---------|--------------|------------|
@@ -19,6 +19,18 @@
 | nature-citation | `_archive/nature-citation/` | 分段-证据分级已被 `citation-tracer` 覆盖 | ❌ 无需新建 |
 | nature-data | `_archive/nature-data/` | FAIR/数据可用性声明国赛无需求 | ❌ 无需新建 |
 | nature-response | `_archive/nature-response/` | 仅期刊投稿审稿回复用 | ❌ 无需新建 |
+
+## 一·bis、归档清单——低频部分（5 个，v4.8 同批）
+
+| 原 skill | 归档位置 | 方法论精华去向 | 是否新建 |
+|---------|---------|--------------|---------|
+| academic-paper-strategist | `_archive/academic-paper-strategist/` | 哲学论文规划，与数学建模竞赛无关 | ❌ 无需 |
+| academic-paper-composer | `_archive/academic-paper-composer/` | 同上（其章节质检/终评脚本已在 v4.5 断链清零时实现并保留） | ❌ 无需 |
+| academic-defense-pptx | `_archive/academic-defense-pptx/` | **`defense-ppt-builder-zh`** skill（与 nature-paper2ppt 合并） | ✅ 新建 skill |
+| csv-data-summarizer | `_archive/csv-data-summarizer/` | `data-cleaning-and-visualization/references/quick-eda-protocol.md` | ✅ 新建 |
+| result-validator | `_archive/result-validator/` | `quality-assurance-auditor/references/result-validation-rules.md` | ✅ 新建 |
+
+（以上 5 项与 §六 验证中"settings.json 删除 14 个注册"对应：14 = 9 Nature + 5 低频。）
 
 ---
 
@@ -117,7 +129,7 @@ Claude 触发 paper-polisher skill（统一润色入口）
 
 ## 六、验证
 
-- ✅ 9 个 skill 已 git mv 到 `_archive/`（git log 可查）
+- ✅ 14 个 skill 已 git mv 到 `_archive/`（9 Nature + 5 低频，git log 可查）
 - ✅ 6 份 references 文档已创建（每个都标注来源）
 - ✅ `defense-ppt-builder-zh` 新 skill 已创建（SKILL.md + 目录结构）
 - ✅ `settings.json` 已更新（删除 14 个注册，新增 1 个）

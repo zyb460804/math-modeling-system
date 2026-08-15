@@ -72,9 +72,10 @@ def format_number(value: float, decimal_places: int = 1) -> str:
 
 
 def replace_in_paper(paper_text: str, replacements: list[tuple[str, str]]) -> tuple[str, int]:
-    """在论文中替换文本"""
+    """在论文中替换文本（迭代 replacements 清单——旧版误迭代 paper_text 字符串，
+    一旦被调用必然 ValueError 崩溃，属潜伏 bug；当前 main 走内联循环未触发）"""
     count = 0
-    for old, new in paper_text:
+    for old, new in replacements:
         if old in paper_text:
             paper_text = paper_text.replace(old, new, 1)
             count += 1

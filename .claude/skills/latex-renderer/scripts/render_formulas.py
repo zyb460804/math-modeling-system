@@ -64,17 +64,8 @@ def render_formula(latex: str, output_path: str, dpi: int = 150, fontsize: int =
         return False
 
 
-def main():
+def main(input_file=None, dpi=150):
     configure_utf8()
-    
-    # 解析参数
-    input_file = None
-    dpi = 150
-    for i, arg in enumerate(sys.argv[1:]):
-        if arg == "--input" and i + 2 < len(sys.argv):
-            input_file = sys.argv[i + 2]
-        elif arg == "--dpi" and i + 2 < len(sys.argv):
-            dpi = int(sys.argv[i + 2])
     
     root = Path.cwd()
     figures_dir = root / "paper_output" / "figures"
@@ -137,4 +128,12 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="LaTeX 公式渲染器：扫描 .md 文件中的公式，渲染为 PNG 图片并生成公式索引。",
+    )
+    parser.add_argument("--input", default=None, help="指定要渲染的 .md 文件路径（默认扫描 paper_output/ 全部 .md）")
+    parser.add_argument("--dpi", type=int, default=150, help="渲染分辨率（默认 150）")
+    args = parser.parse_args()
+    raise SystemExit(main(args.input, args.dpi))

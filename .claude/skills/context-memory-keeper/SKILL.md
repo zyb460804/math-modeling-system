@@ -116,12 +116,12 @@ description: "Manages persistent memory with 3-layer architecture (Working/Short
 ### 写入时
 - 使用了新的 MODEL/ALGORITHM → 更新 `memory_entity_index.md`
 - 发现新的模型链/组合 → 建议更新 `outputs/knowledge_graph.md`
-- 案例完成 → 触发 `case_feedback_loop.md` 回灌
+- 案例完成 → 触发 `outputs/case_feedback_loop.md` 回灌
 
 ### 交叉引用格式（Karpathy 风格）
 在记忆文件中使用 `→` 标注引用关系：
 ```
-- 当前模型: TOPSIS → 代码: resources/04_代码模板/03_熵权法TOPSIS.py
+- 当前模型: TOPSIS → 代码: resources/04_代码模板/14种国赛必备算法源代码/14种国赛必备算法Python源代码/评价类 - TOPSIS 法.py
 - 评分标准: → outputs/scoring_rubric.md（100分制7维度）
 - 避坑提醒: → outputs/algorithm_selection_red_flags.md#熵权法
 ```

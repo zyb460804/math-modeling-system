@@ -1,6 +1,6 @@
 # MathModel Skill 数学建模竞赛生产系统 — 完整文档
 
-> **版本：v3.3 | 2026-06-11**
+> **版本：v3.4 | 2026-08-15**（对齐 v4.9 实况：54 skill / 9 agent / 7 hook / outputs 75 文件 / Nature 轨道 v4.8 已归档）
 > 
 > 本文档面向想学习和复用本系统的人。从零开始，包含系统架构、工作流程、核心组件详解、使用方法、扩展指南和踩坑记录。
 > 
@@ -67,7 +67,7 @@
 | 论文生产器 | 写作、改稿、摘要 | `paper-formal-writer` skill | 根据结果生成 18000+ 字论文 |
 | 代码生成器 | Python/Matlab 代码 | `model-code-and-result-generator` skill | 生成优化模型代码并运行 |
 | 图示设计器 | 流程图、结果图 | `diagram-maker` / `math-figure` skills | 生成论文所需的图表 |
-| 答辩陪练 | 问答、追问链 | `defense-simulator` skill | 模拟评委提问并准备答案 |
+| 答辩陪练 | 问答、追问链 | `defense` skill（统一入口，内部调度 defense-simulator） | 模拟评委提问并准备答案 |
 
 ### 1.3 适用竞赛
 
@@ -124,10 +124,10 @@
                                 │
           ┌─────────────────────┼─────────────────────┐
           ▼                     ▼                     ▼
-   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+│   ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
    │  轨道 A     │      │  轨道 B     │      │  Nature     │
-   │  自动流水线  │      │  手动工作流  │      │  学术写作   │
-   │  10 Skills  │      │  9 Skills   │      │  9 Skills   │
+   │  自动流水线  │      │  手动工作流  │      │（v4.8 归档） │
+   │  10 Skills  │      │  9 Skills   │      │→references  │
    └──────┬──────┘      └──────┬──────┘      └──────┬──────┘
           │                    │                     │
           ▼                    ▼                     ▼
@@ -135,13 +135,13 @@
 │                        共享基础设施                                   │
 │                                                                      │
 │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐            │
-│  │  6 MCP Server │  │  8 Agent      │  │  6 Hook       │            │
+│  │  6 MCP Server │  │  9 Agent      │  │  7 Hook       │            │
 │  │  外部工具集成  │  │  并行子代理    │  │  生命周期钩子  │            │
 │  └───────────────┘  └───────────────┘  └───────────────┘            │
 │                                                                      │
 │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐            │
 │  │  知识库        │  │  算法模板库    │  │  图表教程库    │            │
-│  │  73 文件       │  │  64+ 算法     │  │  50+ 图表     │            │
+│  │  75 文件       │  │  64+ 算法     │  │  50+ 图表     │            │
 │  └───────────────┘  └───────────────┘  └───────────────┘            │
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │
@@ -162,8 +162,8 @@
 | **用户层** | 用户输入赛题和附件 | problem_files/ |
 | **编排层** | 阶段判断、路由、全流程控制 | orchestrator skill |
 | **执行层** | 具体任务执行（读题/建模/写作/排版） | 10 个核心 skill |
-| **支撑层** | 并行执行、外部集成、生命周期管理 | Agent + MCP + Hook |
-| **知识层** | 评分标准、方法匹配、写作模板 | 73 个知识文件 |
+| **支撑层** | 并行执行、外部集成、生命周期管理 | 9 Agent + 6 MCP + 7 Hook |
+| **知识层** | 评分标准、方法匹配、写作模板 | 75 个知识文件 |
 
 **设计原则**：
 - **编排层不做事**：orchestrator 只负责路由，不执行具体任务
@@ -400,6 +400,7 @@ Agent 是 Claude Code 的子代理，可以并行执行任务。每个 Agent 是
 | `model-comparison` | 多模型并行对比 | All | 模型对比 |
 | `citation-checker` | 引用一致性检查 | All | 检查引用 |
 | `competition-prep` | 历史案例匹配备战 | All | 赛前准备 |
+| `blind-panel-judge` | 盲评单座（3 座并行，v4.1） | All | championship 盲评终审 |
 
 #### 3.2.3 Agent 使用方式
 
@@ -467,6 +468,7 @@ Hook 是 Claude Code 的生命周期钩子，在工具执行前后自动触发�
 | Hook | 类型 | 触发条件 | 做什么 |
 |------|------|----------|--------|
 | `protect_outputs.py` | PreToolUse | Write/Edit | 保护 outputs/ 和 .claude/ 不被覆盖 |
+| `precommit_secret_guard.py` | PreToolUse | Bash | 提交前密钥/路径扫描拦截（v4.2） |
 | `check_python.py` | PostToolUse | Edit/Write .py | Python 语法检查 |
 | `format_python.py` | PostToolUse | Edit/Write .py | Black 自动格式化 |
 | `auto_evidence_gate.py` | PostToolUse | Edit/Write | 关键文件变更时触发证据门禁 |
@@ -533,7 +535,7 @@ if __name__ == "__main__":
 
 #### 3.5.1 知识库结构
 
-位于 `outputs/` 目录，共 73 个文件：
+位于 `outputs/` 目录，共 75 个文件（另有 `scripts/`、`_reports/` 两个子目录）：
 
 ```
 outputs/
@@ -552,24 +554,24 @@ outputs/
 │   ├── model_selection_flow.md ← 模型选型流程
 │   └── ...
 │
-├── 写作表达层（13 文件）
+├── 写作表达层（14 文件）
 │   ├── writing_templates.md    ← 写作模板
 │   ├── abstract_templates.md   ← 摘要模板
-│   ├── high_score_expression_library.md ← 高分表达库
+│   ├── empirical.json          ← 实测分位（v2.0 by_topic）
 │   └── ...
 │
-├── 审稿评分层（12 文件）
+├── 审稿评分层（11 文件）
 │   ├── scoring_rubric.md       ← 评分量表（100 分制）
 │   ├── revision_checklist.md   ← 修订清单
 │   └── ...
 │
-├── 答辩准备层（7 文件）
+├── 答辩准备层（6 文件）
 │   ├── defense_qa_bank.md      ← 答辩题库
 │   ├── defense_followup_chains.md ← 追问链
 │   └── ...
 │
 ├── 数据处理层（3 文件）
-├── 质量验收层（5 文件）
+├── 质量验收层（4 文件）
 └── 图表可视层（4 文件）
 ```
 
@@ -577,7 +579,7 @@ outputs/
 
 | 文件 | 用途 | 被谁引用 |
 |------|------|----------|
-| `scoring_rubric.md` | 9 维度 100 分制评分标准 | paper-reviewer, review |
+| `scoring_rubric.md` | 7 模块 100 分制评分标准（9 类质量信号只观察不改分值） | paper-reviewer, review |
 | `method_matching.md` | 11 类任务×模型×算法×风险对照表 | model-selector, analyze |
 | `writing_templates.md` | 摘要/问题分析/模型建立/求解模板 | paper-formal-writer |
 | `high_score_expression_library.md` | 高分表达库 | paper-rewriter |
@@ -968,7 +970,7 @@ python .claude/skills/paper-formal-writer/scripts/check_paper_format.py
 ├── .gitignore                   ← Git 忽略规则
 │
 ├── .claude/
-│   ├── agents/                  ← 8 个专业 Agent
+│   ├── agents/                  ← 9 个专业 Agent
 │   │   ├── code-tester.md
 │   │   ├── paper-reviewer.md
 │   │   ├── data-validator.md
@@ -976,9 +978,10 @@ python .claude/skills/paper-formal-writer/scripts/check_paper_format.py
 │   │   ├── model-comparison.md
 │   │   ├── citation-checker.md
 │   │   ├── competition-prep.md
-│   │   └── matlab-reviewer.md
-│   │
-│   ├── skills/                  ← 55 个 Skill
+│   │   ├── matlab-reviewer.md
+│   │   └── blind-panel-judge.md ← 盲评单座（v4.1）
+│
+│   ├── skills/                  ← 54 个 Skill（v4.8 大扫除后；另有 _archive/ 14 个归档）
 │   │   ├── paper-workflow-orchestrator/
 │   │   ├── problem-doc-model-selector/
 │   │   ├── modeling-paper-rubric-and-model-selector/
@@ -989,10 +992,11 @@ python .claude/skills/paper-formal-writer/scripts/check_paper_format.py
 │   │   ├── model-selector/
 │   │   ├── chart-recommender/
 │   │   ├── diagram-maker/
-│   │   └── ... (55 total)
-│   │
-│   ├── hooks/                   ← 6 个 Hook
+│   │   └── ... (54 total)
+│
+│   ├── hooks/                   ← 7 个 Hook
 │   │   ├── protect_outputs.py
+│   │   ├── precommit_secret_guard.py
 │   │   ├── check_python.py
 │   │   ├── format_python.py
 │   │   ├── auto_evidence_gate.py
@@ -1035,7 +1039,7 @@ python .claude/skills/paper-formal-writer/scripts/check_paper_format.py
 │       ├── model_route.json     ← 模型路线
 │       └── paper_outline.json   ← 论文大纲
 │
-├── outputs/                     ← 知识库（73 文件）
+├── outputs/                     ← 知识库（75 文件 + scripts/、_reports/）
 │   ├── INDEX.md                 ← 统一索引
 │   ├── scoring_rubric.md        ← 评分量表
 │   ├── method_matching.md       ← 方法匹配表

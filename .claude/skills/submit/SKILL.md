@@ -13,7 +13,7 @@ description: "高分自检后输出论文+代码+图表+答辩清单。触发词
 >
 > 触发时自动按阶段判断：有 `final_paper_source.md` → 走 submit；只有中间结果 → 自动反问用户意图。
 
-调用 `prompts/21_generate_submission_pack.md` 执行提交包生成。
+调用 `prompts/_archive/21_generate_submission_pack.md`（v4.8 已归档）执行提交包生成。
 必须先通过 `outputs/final_quality_gate.md` P0 阻断项检查。
 
 输出：论文正文 → 摘要版 → 修改清单 → 代码清单 → 图示清单 → 答辩提纲 → 5 分钟答辩稿 → PPT 页面大纲 → 缺口与待补项。

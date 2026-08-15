@@ -60,4 +60,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description=(
+            "数据清洗与可视化一键流水线：附件读取诊断 → 数据/图表计划 → "
+            "数据清洗 → 可视化 → 论文级图表模板，产物输出到 paper_output/。"
+        )
+    ).parse_args()
     sys.exit(main())

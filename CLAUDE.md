@@ -118,7 +118,9 @@ git push                                       # 远程已设 origin/main，无�
 
 违反以上规则，用户有权要求 Agent 重做相应阶段。详细禁止行为清单与执行顺序见 `docs/agent_workflow_standard.md`。
 
-**v4.8 升级为代码级强制**：`tools/quality_gate/skill_invocation_gate.py`（G5 门禁）会检查 7 个必调 skill 的产出文件（humanizer-zh-academic / paper-reviewer / defense / ai-failure-checker / citation-tracer / model-selector / 知识查阅），不调 skill → `final_gate_runner.py` FAIL → 不得提交。详细清单见 `docs/agent_workflow_standard.md` §六。
+**v4.8 升级为代码级强制**：`tools/quality_gate/skill_invocation_gate.py`（G5 必调 skill 门）会检查 9 项必调产出（G5.1-G5.9：知识查阅 / 选模对照 / 代码复用对照 / 写作对照 / humanizer-zh-academic / paper-reviewer / ai-failure-checker / citation-tracer / defense），不调 skill → `final_gate_runner.py` FAIL → 不得提交；blind-panel 在该门为 WARN 级，由终检按 championship 模式（v4.9 默认）另行强制。详细清单见 `docs/agent_workflow_standard.md` §六。
+
+> **G5 编号消歧（2026-08-15 审计）**："G5"在本系统有三套历史叠加用法——① G1-G6 阶段门系列的 G5（正文/格式门，见 gate-system.md）；② 终检链 `final_gate_runner.py` 的 "G5 证据门 / G5 skill 调用门 / G5 盲评门"；③ `skill_invocation_gate.py` 的 G5.1-G5.9 必调清单。引用时一律以脚本/文档全名消歧，勿只写 G5。
 
 ### 触发词统一入口（v3.4）
 
@@ -457,7 +459,7 @@ python .claude/skills/quality-assurance-auditor/scripts/auto_detect_and_fix.py -
 - **所有产物** → `paper_output/`（统一输出，不散落根目录）
 - **赛题专用代码** → `paper_output/code/`（不写回 skill 目录）
 
-### 正式交付门禁（七者缺一不可）
+### 正式交付门禁（8+1：七道门禁 + v4.9 默认盲评门，缺一不可）
 
 1. **证据门禁**：`quality-assurance-auditor/scripts/evidence_gate.py --mode official` 通过
 2. **参数一致性门禁**：`quality-assurance-auditor/scripts/check_parameter_consistency.py` 通过
@@ -618,15 +620,6 @@ e:\数学建模\
 │   │   ├── style-calibration           写作风格校准
 │   │   ├── citation-tracer             引用溯源工具
 │   │   └── ai-failure-checker          AI失败模式检查（7-mode checklist）
-│   ├── [GitHub融合] 8 个新增 skill（v3.6-v3.7）
-│   │   ├── consistency-auditor         一致性审计（三审计层第一层）
-│   │   ├── completeness-auditor        完整性审计（三审计层第二层）
-│   │   ├── decision-logger             决策日志记录
-│   │   ├── feature-engineering         特征工程标准化流程
-│   │   ├── algorithm-benchmark         算法基准测试
-│   │   ├── style-calibration           写作风格校准
-│   │   ├── citation-tracer             引用溯源工具
-│   │   └── ai-failure-checker          AI失败模式检查（7-mode checklist）
 │   ├── [同级竞品融合 v4.1] 1 个新增 skill（handsomeZR + mathodology）
 │   │   └── blind-panel                盲评 Panel（3 座 + 20 分冲突 + 真实稀缺性校准）
 │   ├── [同赛道生态融合 v4.2] 3 个新增 skill（jihe520 + Gostyan + Kirito）
@@ -665,22 +658,22 @@ e:\数学建模\
 │   ├── 29                     知识更新
 │   └── 30                     数据理解
 │
-├── outputs/               ← 规则/模板/知识库沉淀（74 文件 + 19 子目录）
+├── outputs/               ← 规则/模板/知识库沉淀（79 文件 = 根 75 + scripts/ 1 + _reports/ 3；以 outputs/INDEX.md 为准）
 │   ├── INDEX.md               ★ 统一索引（唯一入口 + 双向引用导航）
 │   ├── knowledge_graph.md     ★ 知识图谱（实体-关系，Karpathy+GBrain 风格）
 │   ├── scripts/
 │   │   └── knowledge_graph_query.py  ★ 图谱查询脚本
 │   ├── 系统调度层（11 文件）     task_router / asset_registry / file_map 等
 │   ├── 建模选模层（13 文件）     method_matching / algorithm_templates 等
-│   ├── 写作表达层（13 文件）     writing_templates / abstract_templates 等
-│   ├── 审稿评分层（12 文件）     scoring_rubric / revision_checklist 等
-│   ├── 答辩准备层（7 文件）      defense_qa_bank / defense_followup_chains 等
+│   ├── 写作表达层（14 文件）     writing_templates / abstract_templates / empirical.json 等
+│   ├── 审稿评分层（11 文件）     scoring_rubric / revision_checklist 等
+│   ├── 答辩准备层（6 文件）      defense_qa_bank / defense_followup_chains 等
 │   ├── 数据处理层（3 文件）      data_cleaning_standards 等
-│   ├── 质量验收层（5 文件）      final_quality_gate 等
+│   ├── 质量验收层（4 文件）      final_quality_gate / validation / reproducibility / sensitivity
 │   ├── 图表可视层（4 文件）      figure_templates 等
 │   ├── 提示词调度（1 文件）      prompt_master_pack
-│   ├── 提取文本/                 抽取文本存档
-│   └── 案例子目录（19 个）       按算法分类的案例数据
+│   ├── _reports/               抽取/OCR 报告存档（award_pdf_extraction / ocr_report 等）
+│   └── （另有 赛中流程/Nature桥接/竞赛差异/提取文本/dim_weights 等 6 文件 + scripts/ 图谱查询）
 │
 ├── paper_output/          ← ★ 当前赛题产物输出目录（v3.0 新增）
 │   ├── OUTPUT_LAYOUT.md       输出位置说明
@@ -724,7 +717,7 @@ e:\数学建模\
 │   ├── tables/               结果表格（CSV）
 │   └── slides/               答辩材料/PPT
 │
-├── tools/                 ← 辅助工具（paper_search/visualization）
+├── tools/                 ← 辅助工具（quality_gate 终检链 + paper_search/visualization）
 │
 ├── docs/                  ← MathModel-Skill 文档（v3.0 新增）
 │   ├── SYSTEM_GUIDE.md        系统总指南
@@ -766,7 +759,7 @@ e:\数学建模\
 
 ### Prompt 工作流（Legacy 参考）
 
-> `prompts/00-30` 的 32 个提示词文件 **v4.8 已归档到 `prompts/_archive/`**（100% 有 skill 替代，实测 0 调用）。如需回退可从 `_archive/` 恢复，但正常工作流应走 Skill。详见 `prompts/README.md`。
+> `prompts/_archive/00-30` 的 31 个编号提示词 + MASTER_PROMPT_math_modeling.txt（共 32 文件）**v4.8 已归档到 `prompts/_archive/`**（100% 有 skill 替代，实测 0 调用）。如需回退可从 `_archive/` 恢复，但正常工作流应走 Skill。详见 `prompts/README.md`。
 
 ```
 任务路由 → 知识更新/资料入库 → 单题开工 → 数据理解 → 审题选模 →
@@ -842,7 +835,7 @@ e:\数学建模\
 | **报告新鲜度** / 校验报告是否过期 | `context-memory-keeper/scripts/freshness_check.py`（v4.2）→ SHA-256 源哈希，旧报告标记 STALE |
 | **安全检查** / 密钥扫描 / 注入防护 | `consistency-auditor/scripts/security_check.py`（v4.2）→ 密钥/路径/Markdown 注入（git commit 前自动拦截） |
 | **编译 LaTeX** / latex 编译 | `paper-formal-writer/scripts/compile_latex.py`（v4.2）→ 2 pass + 失败重试 3 次（解析 .log 错误行） |
-| **提取表格** / PDF 表格 / Camelot | `data-cleaning/scripts/extract_pdf_tables.py`（v4.3）→ 赛题附表一键转 CSV/Excel + 索引 |
+| **提取表格** / PDF 表格 / Camelot | `data-cleaning-and-visualization/scripts/extract_pdf_tables.py`（v4.3）→ 赛题附表一键转 CSV/Excel + 索引 |
 | **公式 OCR** / 提取公式 / 图片转 LaTeX | `problem-doc-model-selector/scripts/extract_formulas_ocr.py`（v4.3）→ Pix2Text 公式识别 |
 | **期刊风图表** / 图表美化 / SciencePlots | `math-figure/scripts/journal_style.py`（v4.3）→ IEEE/Nature/Science 76 样式 |
 | **保留格式降重** / Word 格式保留 | `aigc-reduce/scripts/replace_docx_preserve_format.py`（v4.3）→ 改写降 AIGC 后原地放回 .docx 不破坏排版 |

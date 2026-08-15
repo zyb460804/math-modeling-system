@@ -147,10 +147,19 @@ def cmd_check(args: argparse.Namespace) -> int:
     stale: list[str] = []
     fresh: list[str] = []
     no_hash: list[str] = []
+    unreadable: list[str] = []
     for r in reports:
         try:
             data = json.loads(r.read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            # fail-closed（显式指定报告时）：读不到 = 无法证明其新鲜，
+            # 记入 stale 触发 rc=1——旧版静默 continue，"check <不存在的报告>"
+            # 会以 FRESH=0 STALE=0 rc=0 假绿收场。全量扫描模式仅可见列出，不改变判定。
+            if args.report:
+                print(f"  ✗ UNREADABLE {r}  （无法读取/解析: {e}）")
+                stale.append(r.name)
+            else:
+                unreadable.append(r.name)
             continue
         if not isinstance(data, dict) or "source_hash" not in data:
             no_hash.append(r.name)
@@ -172,8 +181,10 @@ def cmd_check(args: argparse.Namespace) -> int:
         print(f"  ✗ STALE    {n}  （源已变化，报告需重新生成）")
     for n in no_hash:
         print(f"  · NO_HASH  {n}  （无 source_hash 字段，用 record 命令补充）")
+    for n in unreadable:
+        print(f"  · UNREADABLE  {n}  （无法读取/解析，未能校验新鲜度）")
 
-    print(f"\n[fresh] FRESH={len(fresh)} STALE={len(stale)} NO_HASH={len(no_hash)}")
+    print(f"\n[fresh] FRESH={len(fresh)} STALE={len(stale)} NO_HASH={len(no_hash)} UNREADABLE={len(unreadable)}")
     return 0 if not stale else 1
 
 

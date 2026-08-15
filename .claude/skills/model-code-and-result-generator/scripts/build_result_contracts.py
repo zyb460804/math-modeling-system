@@ -443,11 +443,10 @@ def generate_algorithm_wrapper(
     algo_display = algo_entry.get("display_name", algo_id)
 
     # 生成 wrapper 代码
-    wrapper = f'''#!/usr/bin/env python3
-"""算法 wrapper：{qid} - {algo_display}
-从算法注册表自动选择：{algo_id}
-模板代码路径：{algo_file}
-"""
+    wrapper = f"""#!/usr/bin/env python3
+# 算法 wrapper：{qid} - {algo_display}
+# 从算法注册表自动选择：{algo_id}
+# 模板代码路径：{algo_file}
 import json
 import os
 import subprocess
@@ -470,7 +469,7 @@ ALGO_DISPLAY = "{algo_display}"
 
 
 def run_template():
-    """运行模板代码，捕获输出。"""
+    # 运行模板代码，捕获输出。
     if not TEMPLATE_PATH.exists():
         print(f"  警告: 模板代码不存在: {{TEMPLATE_PATH}}")
         return None, 1, ""
@@ -499,7 +498,7 @@ def run_template():
 
 
 def parse_output_to_results(stdout: str) -> dict:
-    """尝试从模板代码的 stdout 中解析结果。"""
+    # 尝试从模板代码的 stdout 中解析结果。
     results = {{
         "question_id": QID,
         "algorithm": ALGO_ID,
@@ -512,7 +511,7 @@ def parse_output_to_results(stdout: str) -> dict:
 
 
 def save_results(results: dict, exit_code: int):
-    """保存结果到 model_results.json。"""
+    # 保存结果到 model_results.json。
     src_path = os.path.relpath(__file__, PROJECT_ROOT).replace(os.sep, "/")
     provenance = {{
         "source_code_path": src_path,
@@ -568,7 +567,7 @@ def main():
 
 if __name__ == "__main__":
     raise SystemExit(main())
-'''
+"""
     return wrapper
 
 
@@ -1420,4 +1419,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description=(
+            "模型结果证据契约生成器：生成结果/指标/结论契约、表格索引，"
+            "并按 model_route.json 生成 q*_model.py 建模代码脚手架。"
+        )
+    ).parse_args()
     raise SystemExit(main())

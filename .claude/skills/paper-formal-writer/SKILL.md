@@ -40,6 +40,8 @@ description: "国赛数学建模正式论文范式、outline、Word 排版和格
 | 文献检索指南 | `references/literature-review-guide.md` | **写文献综述时**加载 | 文献检索策略、综述结构、引用规范 |
 | 4轮自审框架 | `references/four-round-self-review.md` | **论文完成后**加载 | 4轮系统化自审清单：结构→论证→表达→格式 |
 | Anti-AI-detection写作指南 | `references/anti-ai-detection-guide.md` | **自审Round 3时**加载 | 降低AI生成痕迹、增强人写感、规避AIGC检测 |
+| AI 写作红绿灯 | `references/ai-traffic-light.md` | **写作前/降AI味时**加载 | 绿/黄/红灯行为边界 + paper-type 诊断（v4.8 整合自 nature-polishing） |
+| 美赛英文写作指南 | `references/english-academic-writing.md` | **写 MCM/ICM 英文稿时**加载 | 论证驱动写作 + 章节默认架构 + 中式英语失败模式（v4.8 整合自 nature-writing） |
 
 ### 路由规则
 
@@ -51,6 +53,8 @@ description: "国赛数学建模正式论文范式、outline、Word 排版和格
 4. **Step 3（撰写第8章参考文献/文献综述部分）**：加载 `literature-review-guide.md`
 5. **Step 4（格式检查后）**：加载 `four-round-self-review.md`，执行4轮自审
 6. **Step 4（自审Round 3 表达层审查）**：加载 `anti-ai-detection-guide.md`，降低AIGC痕迹
+7. **写 MCM/ICM 英文稿时**：加载 `english-academic-writing.md`，按论证驱动结构组织英文表达
+8. **写作前/降AI味阶段**：加载 `ai-traffic-light.md`，先做 paper-type 诊断再决定改写强度
 
 ## ★ 项目知识资产联动（必须执行）
 本 skill 执行时，**必须**读取以下 `outputs/` 中已沉淀的规则，作为正式写作的权威依据：

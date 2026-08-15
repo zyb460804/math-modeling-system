@@ -122,4 +122,12 @@ def main():
     print("\n✨ 所有数据清洗任务已完成。")
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description=(
+            "数据清洗：扫描 problem_files/ 与 crawled_data/ 下的 CSV/Excel/TXT，"
+            "处理缺失值/重复值/类型，输出到 paper_output/data_cleaned/。"
+        )
+    ).parse_args()
     main()

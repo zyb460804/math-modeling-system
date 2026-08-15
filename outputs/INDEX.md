@@ -1,7 +1,7 @@
 # outputs/INDEX.md — 数学建模生产系统统一索引
 
-> **最后更新：2026-07-23（v4.3）**
-> **系统全演进**：`paper_output/research/CHANGELOG.md`（v4.0→v4.3 四轮融合一览）
+> **最后更新：2026-08-15（v4.9 同步）**
+> **系统全演进**：`paper_output/research/CHANGELOG.md`（v4.0→v4.9 全演进一览）
 > **用途：** 本文件是整个 `outputs/` 的唯一入口索引。所有任务执行前，先在此表查到对应文件，再深入调用。
 > **调用顺序：** `INDEX.md（定位文件）→ task_router.md（分流任务）→ 对应 prompt + output（执行）→ asset_registry.md（登记）`
 > **v3.4 统一入口**：同一意图 → 默认最深输出。详见下方"统一入口 Skill → outputs 映射"。
@@ -10,21 +10,21 @@
 
 ## 一、目录总览
 
-当前 `outputs/` 按 **8 大功能域** 组织，共 74 个文件 + 1 个子目录（`scripts/`）：
+当前 `outputs/` 根目录 **75 个文件**，含子目录共 **79 个文件**（`scripts/` 1 + `_reports/` 3，不含 `__pycache__`），按核心 8 大功能域 + 4 个补充域组织（INDEX/knowledge_graph/dim_weights 等计入总数）：
 
 | 功能域 | 文件数 | 核心入口 | 服务阶段 |
 |--------|--------|----------|----------|
-| 🏗️ 系统调度 | 12 | `task_router.md` | 全流程 |
+| 🏗️ 系统调度 | 11 | `task_router.md` | 全流程 |
 | 🧩 建模选模 | 13 | `method_matching.md` | 审题/建模 |
-| ✍️ 写作表达 | 13 | `writing_templates.md` | 写作/改稿 |
-| 🔍 审稿评分 | 12 | `scoring_rubric.md` | 审稿/冲刺 |
-| 🎤 答辩准备 | 7 | `defense_qa_bank.md` | 答辩 |
+| ✍️ 写作表达 | 14 | `writing_templates.md` | 写作/改稿 |
+| 🔍 审稿评分 | 11 | `scoring_rubric.md` | 审稿/冲刺 |
+| 🎤 答辩准备 | 6 | `defense_qa_bank.md` | 答辩 |
 | 📊 数据处理 | 3 | `data_cleaning_standards.md` | 数据理解 |
-| ✅ 质量验收 | 5 | `final_quality_gate.md` | 提交前 |
+| ✅ 质量验收 | 4 | `final_quality_gate.md` | 提交前 |
 | 🎨 图表可视 | 4 | `figure_templates.md` | 写作/答辩 |
 | 📦 提示词调度 | 1 | `prompt_master_pack.md` | 赛中 |
 | 🏆 赛中流程 | 1 | `competition_checklist.md` | 赛中72h |
-| 📚 提取文本 | 6 文件 + 2 目录 | `extracted_material_synthesis.md` | 建库/检索 |
+| 📚 提取文本 | 2 文件 + `_reports/`（3 报告） | `extracted_material_synthesis.md` | 建库/检索 |
 | 🏆 竞赛差异 | 1 | `competition_specific.md` | 各赛事格式/评分 |
 
 ---
@@ -45,7 +45,7 @@
 | `/submit` | 最终比赛提交包 | `final_quality_gate.md` `competition_checklist.md` |
 | AIGC 降重 | 默认 `humanizer-zh-academic`；备选 `aigc-reduce` | — |
 | `blind-panel`（v4.1） | 3 座独立盲评 + 20 分冲突 + 真实稀缺性校准 | `scoring_rubric.md` `empirical.json`（by_topic 锚点）|
-| 模式切换（v4.1） | fast/standard/championship | — |
+| 模式切换（v4.9 默认 championship） | 默认盲评全开；"切 fast"/"这次用 standard" 才降级（escape hatch） | — |
 
 **内部调度工具**（由统一入口分派，不直接暴露）：
 `diagram-maker` / `chart-recommender` / `math-figure` / `network-graph` / `interactive-chart` → `/figure`
@@ -144,15 +144,15 @@
 
 | 合同类型 | 模板位置 | 用途 |
 |---------|---------|------|
-| 模型合同 | `paper-workflow-orchestrator/references/model-contract-template.md` | 前置合同：核心结论+证据链+反冗余+交付规格 |
-| 图表合同 | `paper-workflow-orchestrator/references/figure-contract-template.md` | 图表合同：结论+面板证据+灰度安全+色盲无障碍 |
+| 模型合同 | `.claude/skills/paper-workflow-orchestrator/references/model-contract-template.md` | 前置合同：核心结论+证据链+反冗余+交付规格 |
+| 图表合同 | `.claude/skills/paper-workflow-orchestrator/references/figure-contract-template.md` | 图表合同：结论+面板证据+灰度安全+色盲无障碍 |
 
 ### 门控架构（G1-G6）
 
 | 门控 | 时机 | 要求 | 参考文档 |
 |------|------|------|---------|
-| G1 | 预检通过 | problem_files 非空 | `paper-workflow-orchestrator/references/gate-system.md` |
-| G2 | PoC验证 | 每个候选方法有≤30行PoC | `paper-workflow-orchestrator/references/poc-validation-gate.md` |
+| G1 | 预检通过 | problem_files 非空 | `.claude/skills/paper-workflow-orchestrator/references/gate-system.md` |
+| G2 | PoC验证 | 每个候选方法有≤30行PoC | `.claude/skills/paper-workflow-orchestrator/references/poc-validation-gate.md` |
 | G2.5 | 方法选择后 | 用户填写选择理由（≥50字） | `decision-logger` skill |
 | G3 | 证据门禁 | 所有产物通过QA | `quality-assurance-auditor` |
 | G4 | 结果确认 | 用户确认结果合理性 | `decision-logger` skill |
@@ -160,9 +160,11 @@
 | G5 | 格式门禁 | 论文格式检查通过 | `paper-formal-writer` |
 | G6 | 最终门禁 | 三审计层全部PASS | `consistency-auditor` + `completeness-auditor` + `quality-assurance-auditor` |
 
+> **门禁编号消歧（2026-08-15 审计）**：上表 G1-G6 为阶段门系列（与 `paper-workflow-orchestrator/references/gate-system.md` 对应，其 G3=CODE_REVIEWED、G5=PAPER_SECTION_READY、G6=AUDIT_LAYER_PASSED）。而 `tools/quality_gate/final_gate_runner.py` 终检链另用子门编号：G4.6 自证 / G4.7 实物 / G4.8 数字 / G4.9 公式 / G4.10 图片嵌入，并把证据门、skill 调用门、盲评门标为 "G5 ××门"（`skill_invocation_gate.py` 细分 G5.1-G5.9）。"G5"一词三义，引用时以脚本/文档全名消歧。
+
 ### 数字冻结机制
 
-参考：`paper-workflow-orchestrator/references/frozen-numbers-convention.md`
+参考：`.claude/skills/paper-workflow-orchestrator/references/frozen-numbers-convention.md`
 
 **3步解冻-修改-重冻**：
 1. 解冻：从 `frozen_numbers.json` 读取当前冻结值
@@ -193,33 +195,33 @@
 
 | 资源 | 路径 | 用途 |
 |------|------|------|
-| 95+场景选型矩阵 | `model-selector/references/model-selection-matrix.md` | 场景×问题决策矩阵 |
-| 问题分解法 | `model-selector/references/problem-decomposition.md` | 12型问题分类+信号词+I/O规范 |
-| 端到端Playbook | `model-selector/references/playbooks/` (12个) | 调度/物理/ML/评价/博弈/路径/数据/几何/网络/环境/政策 |
+| 95+场景选型矩阵 | `.claude/skills/model-selector/references/model-selection-matrix.md` | 场景×问题决策矩阵 |
+| 问题分解法 | `.claude/skills/model-selector/references/problem-decomposition.md` | 12型问题分类+信号词+I/O规范 |
+| 端到端Playbook | `.claude/skills/model-selector/references/playbooks/` (12个) | 调度/物理/ML/评价/博弈/路径/数据/几何/网络/环境/政策 |
 
 ### 领域知识库（8大Cookbook）
 
 | Cookbook | 路径 | 覆盖算法 |
 |---------|------|---------|
-| 优化 | `model-code-and-result-generator/references/cookbook-optimization.md` | GA/PSO/SA/LP/DP |
-| 机器学习 | `model-code-and-result-generator/references/cookbook-ml.md` | XGBoost/RF/SVM/NN |
-| 评价 | `model-code-and-result-generator/references/cookbook-evaluation.md` | TOPSIS/AHP/熵权/模糊 |
-| 机理 | `model-code-and-result-generator/references/cookbook-mechanistic.md` | 传热/ODE/几何/光学 |
-| 统计 | `model-code-and-result-generator/references/cookbook-statistical.md` | 假设检验/ANOVA/蒙特卡洛/贝叶斯 |
-| 网络 | `model-code-and-result-generator/references/cookbook-network.md` | 图论/网络流/中心性 |
-| 聚类 | `model-code-and-result-generator/references/cookbook-clustering.md` | 层次/K-Means/DBSCAN/GMM |
-| 博弈 | `model-code-and-result-generator/references/cookbook-game-theory.md` | 纳什/演化/Stackelberg |
+| 优化 | `.claude/skills/model-code-and-result-generator/references/cookbook-optimization.md` | GA/PSO/SA/LP/DP |
+| 机器学习 | `.claude/skills/model-code-and-result-generator/references/cookbook-ml.md` | XGBoost/RF/SVM/NN |
+| 评价 | `.claude/skills/model-code-and-result-generator/references/cookbook-evaluation.md` | TOPSIS/AHP/熵权/模糊 |
+| 机理 | `.claude/skills/model-code-and-result-generator/references/cookbook-mechanistic.md` | 传热/ODE/几何/光学 |
+| 统计 | `.claude/skills/model-code-and-result-generator/references/cookbook-statistical.md` | 假设检验/ANOVA/蒙特卡洛/贝叶斯 |
+| 网络 | `.claude/skills/model-code-and-result-generator/references/cookbook-network.md` | 图论/网络流/中心性 |
+| 聚类 | `.claude/skills/model-code-and-result-generator/references/cookbook-clustering.md` | 层次/K-Means/DBSCAN/GMM |
+| 博弈 | `.claude/skills/model-code-and-result-generator/references/cookbook-game-theory.md` | 纳什/演化/Stackelberg |
 
 ### 写作增强
 
 | 资源 | 路径 | 用途 |
 |------|------|------|
-| Anti-AI检测指南 | `paper-formal-writer/references/anti-ai-detection-guide.md` | 8类AI痕迹+禁用词表+替换策略 |
-| 4轮自审框架 | `paper-formal-writer/references/four-round-self-review.md` | Claim-Evidence→结构→表达→格式 |
-| 章节架构 | `paper-formal-writer/references/section-architecture.md` | 摘要6要素/引言5要素/结果证据阶梯 |
-| 证据金字塔 | `paper-formal-writer/references/evidence-pyramid.md` | 4层证据金字塔 |
-| 常用短语库 | `paper-formal-writer/references/common-phrases.md` | 中英双语学术短语库（10章节） |
-| 文献综述指南 | `paper-formal-writer/references/literature-review-guide.md` | T1/T2/T3信源路由+搜索4层法 |
+| Anti-AI检测指南 | `.claude/skills/paper-formal-writer/references/anti-ai-detection-guide.md` | 8类AI痕迹+禁用词表+替换策略 |
+| 4轮自审框架 | `.claude/skills/paper-formal-writer/references/four-round-self-review.md` | Claim-Evidence→结构→表达→格式 |
+| 章节架构 | `.claude/skills/paper-formal-writer/references/section-architecture.md` | 摘要6要素/引言5要素/结果证据阶梯 |
+| 证据金字塔 | `.claude/skills/paper-formal-writer/references/evidence-pyramid.md` | 4层证据金字塔 |
+| 常用短语库 | `.claude/skills/paper-formal-writer/references/common-phrases.md` | 中英双语学术短语库（10章节） |
+| 文献综述指南 | `.claude/skills/paper-formal-writer/references/literature-review-guide.md` | T1/T2/T3信源路由+搜索4层法 |
 
 ### 新增 Skill（v3.6 GitHub融合）
 
@@ -272,7 +274,7 @@
 | `algorithm_selection_red_flags.md` | **算法选型红旗**：什么时候不该用某个算法 | 选模时 |
 | `method_misuse_alerts.md` | **方法误用预警**：常见误用场景 | 建模/复盘 |
 
-### ✍️ 写作表达层（13 文件）
+### ✍️ 写作表达层（14 文件）
 
 | 文件 | 用途 | 何时调用 |
 |------|------|----------|
@@ -291,7 +293,7 @@
 | `phrase_bank.md` | **竞赛特化句式库**：国赛获奖论文高频句式，按章节分类 | 写作/润色 |
 | `empirical.json` | **实测分位数据**：91篇国赛获奖论文的p25/p50/p75统计 | 评分锚定/质量评估 |
 
-### 🔍 审稿评分层（12 文件）
+### 🔍 审稿评分层（11 文件）
 
 | 文件 | 用途 | 何时调用 |
 |------|------|----------|
@@ -307,7 +309,7 @@
 | `diagnostic_templates.md` | **诊断模板**：快速定位论文问题 | 审稿 |
 | `model_specific_pitfalls.md` | **分题型避坑库** | 建模/复盘 |
 
-### 🎤 答辩准备层（7 文件）
+### 🎤 答辩准备层（6 文件）
 
 | 文件 | 用途 | 何时调用 |
 |------|------|----------|
@@ -326,7 +328,7 @@
 | `data_understanding_workflow.md` | **数据理解流程**：字段映射、质量诊断 | 数据理解 |
 | `table_result_alignment_workflow.md` | **表格对表流程**：数字一致性核对 | 写作/终检 |
 
-### ✅ 质量验收层（5 文件）
+### ✅ 质量验收层（4 个 outputs 文件 + 3 条门禁工具/记录 + 1 已归档）
 
 | 文件 | 用途 | 何时调用 |
 |------|------|----------|
@@ -364,14 +366,14 @@
 
 | 文件 | 用途 | 何时调用 |
 |------|------|----------|
-| `nature_skills_bridge.md` | **Nature Skills 归档公告**（v3.0）：9 个 Nature skill 已归档，方法论精华去向说明 | 需要了解 Nature skill 归档后能力去向时 |
+| `nature_skills_bridge.md` | **Skill 归档公告**（v3.0）：v4.8 共归档 14 个 skill（9 Nature + 5 低频），方法论精华去向说明 | 需要了解归档后能力去向时 |
 
 ### 📚 提取文本层
 
 | 路径 | 用途 |
 |------|------|
-| `extracted_document_text/` | DOCX/PDF 抽取的可检索文本 |
-| `extracted_pdf_text/` | 获奖论文 PDF 抽取文本 |
+| ~~`extracted_document_text/`~~ | ~~DOCX/PDF 抽取的可检索文本~~ **目录已不存在，勿再引用** |
+| ~~`extracted_pdf_text/`~~ | ~~获奖论文 PDF 抽取文本~~ **目录已不存在，勿再引用** |
 | `extracted_material_synthesis.md` | 抽取材料综合归档 |
 | `_reports/award_pdf_extraction_report.md` | PDF 提取报告（已归档） |
 | `_reports/award_pdf_ocr_report.md` | OCR 处理报告（已归档） |
@@ -404,7 +406,7 @@
 ```
 task_router.md
   → 被 INDEX.md 定位
-  → 被 00_route_task.md 调用
+  → 被 prompts/_archive/00_route_task.md 调用（v4.8 已归档）
   ← 分流到: method_matching | writing_templates | scoring_rubric | defense_qa_bank | final_quality_gate
 
 method_matching.md
@@ -460,7 +462,7 @@ knowledge_graph.md（知识图谱）
 
 ---
 
-## 五、功能域→Prompt 对应关系
+## 四、功能域→Prompt 对应关系（prompts/ 已于 v4.8 归档至 `prompts/_archive/`，下表仅回退参考）
 
 | 功能域 | 对应 Prompts（按调用顺序） |
 |--------|---------------------------|
@@ -482,7 +484,7 @@ knowledge_graph.md（知识图谱）
 
 ---
 
-## 六、命名规范
+## 五、命名规范
 
 ### outputs/ 文件命名规范
 
@@ -502,27 +504,27 @@ knowledge_graph.md（知识图谱）
 
 ---
 
-## 五、系统调用最小闭环
+## 六、系统调用最小闭环（prompts 已归档，正常走 Skill 入口）
 
 ```
 收到任务
   ↓
-00_route_task.md → task_router.md（分流）
+prompts/_archive/00_route_task.md → task_router.md（分流）
   ↓
 按阶段选对应 prompt + output（查本 INDEX）
   ↓
 执行：审题 → 选模 → 写作 → 代码 → 图示 → 检验
   ↓
-28_final_quality_gate.md → final_quality_gate.md（终检）
+prompts/_archive/28_final_quality_gate.md → final_quality_gate.md（终检）
   ↓
-21_generate_submission_pack.md（打包提交）
+prompts/_archive/21_generate_submission_pack.md（打包提交）
   ↓
-22_case_feedback_loop.md → case_feedback_loop.md（回灌经验）
+prompts/_archive/22_case_feedback_loop.md → case_feedback_loop.md（回灌经验）
 ```
 
 ---
 
-## 六、自动回环修正（2026-06-21 新增）
+## 七、自动回环修正（2026-06-21 新增）
 
 当检测脚本发现质量问题时，自动运行修正器并重检，最多循环 3 轮，仍失败才报告用户。
 
@@ -551,7 +553,7 @@ python .claude/skills/quality-assurance-auditor/scripts/auto_correct_loop.py
 
 ---
 
-## 七、GitHub 集成资源（2026-06-21 新增）
+## 八、GitHub 集成资源（2026-06-21 新增）
 
 > 以下资源通过 GitHub 集成自动同步至 `resources/` 目录，供全系统调用。
 
@@ -656,7 +658,7 @@ python .claude/skills/quality-assurance-auditor/scripts/auto_correct_loop.py
 
 ---
 
-## 七、维护规则
+## 九、维护规则
 
 1. **新增文件**：必须在本 INDEX 中登记所属功能域
 2. **废弃文件**：在本 INDEX 标注"已废弃"，保留一周后删除

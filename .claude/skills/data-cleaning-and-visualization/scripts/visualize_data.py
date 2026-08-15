@@ -125,4 +125,9 @@ def main():
     print("\n✨ 所有可视化任务已完成。")
 
 if __name__ == "__main__":
+    import argparse
+
+    argparse.ArgumentParser(
+        description="数据可视化：对 paper_output/data_cleaned/ 下的已清洗 CSV 批量生成 EDA 图表。"
+    ).parse_args()
     main()
