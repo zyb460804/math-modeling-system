@@ -86,11 +86,17 @@ CODE_REVIEW_PATTERNS = [
 
 # 同一产物的候选路径（旧布局/新布局兼容）：命中任一即算存在
 # table_index.json 历史上登记为根路径，实际产物在 tables/ 下 → 路径错位误报（B-①）
+# P2-16（H-7 部分）：format_check_report.json 的实际生产者是
+# paper-formal-writer/scripts/check_paper_format.py，写在 paper_output 根
+# （OUTPUT_DIR/format_check_report.json，workflow_guard 按该路径消费），
+# 此前审计却只认 qa/ 下 → 每次都误报 missing_audit_report。补根路径候选对齐契约。
 ARTIFACT_FALLBACKS = {
     "tables/table_index.json": ["table_index.json"],
     "table_index.json": ["tables/table_index.json"],
     "figure_index.json": ["figures/figure_index.json"],
     "figures/figure_index.json": ["figure_index.json"],
+    "qa/format_check_report.json": ["format_check_report.json"],
+    "format_check_report.json": ["qa/format_check_report.json"],
 }
 
 
@@ -308,7 +314,8 @@ def run_audit(questions: list[str], verbose: bool = False) -> dict:
     ]
 
     for report_path, description in audit_reports:
-        full_path = OUTPUT_DIR / report_path
+        # P2-16：走 resolve_artifact（带候选路径），不再只拼 qa/ 下的单一路径
+        full_path = resolve_artifact(report_path)
         status = check_audit_report_status(full_path)
 
         result["checks"]["audit_reports"]["details"].append({

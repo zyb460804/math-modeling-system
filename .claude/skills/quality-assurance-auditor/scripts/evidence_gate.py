@@ -3,6 +3,7 @@ import json
 import math
 import os
 import re
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -13,14 +14,24 @@ BASE_DIR = Path.cwd()
 OUTPUT_DIR = BASE_DIR / "paper_output"
 QA_DIR = OUTPUT_DIR / "qa"
 MODEL_ROUTE_FILE = OUTPUT_DIR / "plan" / "model_route.json"
-FIGURE_INDEX_FILE = OUTPUT_DIR / "figure_index.json"
+# P2-16（H-7 部分）：figure/table 索引双候选（根 + figures//tables/ 子目录），
+# 与 consistency-auditor / completeness-auditor（ARTIFACT_FALLBACKS）对齐同一契约
+FIGURE_INDEX_CANDIDATES = [OUTPUT_DIR / "figure_index.json", OUTPUT_DIR / "figures" / "figure_index.json"]
+TABLE_INDEX_CANDIDATES = [OUTPUT_DIR / "tables" / "table_index.json", OUTPUT_DIR / "table_index.json"]
 MODEL_RESULTS_FILE = OUTPUT_DIR / "results" / "model_results.json"
 METRICS_FILE = OUTPUT_DIR / "results" / "metrics.json"
 CONCLUSIONS_FILE = OUTPUT_DIR / "results" / "conclusions.json"
-TABLE_INDEX_FILE = OUTPUT_DIR / "tables" / "table_index.json"
 TASKS_FILE = OUTPUT_DIR / "tasks.json"
 REPORT_JSON = QA_DIR / "evidence_gate_report.json"
 REPORT_MD = QA_DIR / "evidence_gate_report.md"
+
+# freshness_check.py 位置（同仓 .claude/skills/ 下，按 __file__ 定位，不依赖 cwd）
+FRESHNESS_SCRIPT = (
+    Path(__file__).resolve().parents[2] / "context-memory-keeper" / "scripts" / "freshness_check.py"
+)
+
+# P2-13：provenance.source_code_path 必须是真实源码后缀（此前任意存在文件都算数）
+SOURCE_CODE_SUFFIXES = (".py", ".m")
 
 # CR-8/G-02：增补 "TBD" 与 "待补"（手写索引/结果常用占位写法，此前不在坏状态表内直接放行）
 BAD_STATUSES = {
@@ -57,6 +68,11 @@ def load_json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
         return {"__error__": str(exc)}
+
+
+def first_existing(candidates: list[Path]) -> Path:
+    """返回第一个存在的候选路径；全不存在时返回首选候选（供报错信息使用）。"""
+    return next((c for c in candidates if c.exists()), candidates[0])
 
 
 def question_ids(model_route: Any) -> list[str]:
@@ -162,10 +178,12 @@ def index_entry_path(entry: dict[str, Any]) -> str | None:
 def check_index_entries_disk(entries: list[dict[str, Any]], kind: str) -> tuple[list[str], list[str]]:
     """逐条核验 figure/table 索引条目声明的产物文件在磁盘真实存在。
 
-    定级（CR-8）：
-    - 声明了文件路径但磁盘不存在 → FAIL（CRITICAL）：论文引用了不存在的证据，
-      是"手写索引伪造合规外观"（G-02）的典型形态；
-    - 未声明路径 / 来源非文件（如「论文正文」）→ WARNING：无法核验，不装作已核验。
+    定级（CR-8 + P1-7 幽灵链收口）：
+    - 未声明 path/source 路径 → FAIL（CRITICAL）：索引条目必须声明可核验的产物路径，
+      无路径=不可核验，不装作已核验（旧 WARNING 会让"正文见图N + 索引无 path + 磁盘无实物"
+      的幽灵图表链全链零 FAIL）；
+    - 来源非文件（如「论文正文」）→ FAIL（CRITICAL）：同上，非文件来源同样不可核验；
+    - 声明了文件路径但磁盘不存在 → FAIL（CRITICAL）：论文引用了不存在的证据。
     条目自报的 exists 字段一律忽略，只认磁盘事实。
     """
     failures: list[str] = []
@@ -177,10 +195,16 @@ def check_index_entries_disk(entries: list[dict[str, Any]], kind: str) -> tuple[
         ident = str(entry.get("figure_id") or entry.get("id") or entry.get("title") or "?")
         text = index_entry_path(entry)
         if text is None:
-            warnings.append(f"{qid}: {kind}条目 [{ident}] 未声明 path/source 文件路径，无法核验磁盘存在性")
+            failures.append(
+                f"{qid}: {kind}条目 [{ident}] 未声明 path/source 产物路径——"
+                f"索引条目必须声明可核验的产物路径（无路径=不可核验，不装作已核验）"
+            )
             continue
         if not looks_like_file_path(text):
-            warnings.append(f"{qid}: {kind}条目 [{ident}] 来源「{text}」非文件路径，无法核验磁盘存在性")
+            failures.append(
+                f"{qid}: {kind}条目 [{ident}] 来源「{text}」非文件路径——"
+                f"索引条目必须声明可核验的产物路径（非文件来源=不可核验，不装作已核验）"
+            )
             continue
         if not any(candidate.exists() for candidate in artifact_candidates(text)):
             failures.append(f"{qid}: {kind}条目 [{ident}] 指向的文件不存在（磁盘事实）：{text}")
@@ -251,6 +275,11 @@ def provenance_failures(item: dict[str, Any]) -> list[str]:
         failures.append("execution_provenance.source_code_path 为空")
     elif not source_code.exists():
         failures.append(f"source_code_path 不存在：{source_code}")
+    elif source_code.suffix.lower() not in SOURCE_CODE_SUFFIXES:
+        # P2-13：此前任意存在文件都算"有源码"（如 .txt/.json），现在必须是真实源码后缀
+        failures.append(
+            f"source_code_path 必须为 .py/.m 源码文件，当前后缀「{source_code.suffix or '无后缀'}」：{source_code}"
+        )
 
     if provenance.get("run_exit_code") not in (0, "0"):
         failures.append(f"run_exit_code 不是 0：{provenance.get('run_exit_code')}")
@@ -263,6 +292,41 @@ def provenance_failures(item: dict[str, Any]) -> list[str]:
         if not artifact_path.exists():
             failures.append(f"输出产物不存在：{artifact}")
     return failures
+
+
+def provenance_drift_warnings(item: dict[str, Any]) -> list[str]:
+    """源文件 mtime 晚于任一输出产物 → 改码未重跑的漂移信号（P2-13）。
+
+    分级：WARNING 不 FAIL——源比产物新只是"结果可能过期"的线索（重跑前的正常
+    中间态、或产物由别的入口生成都可能触发），如实提示而非阻断。
+    """
+    provenance = item.get("execution_provenance")
+    if not isinstance(provenance, dict):
+        return []
+    if not str(provenance.get("source_code_path") or "").strip():
+        return []
+    source = resolve_artifact(provenance.get("source_code_path"))
+    if not source.exists() or source.suffix.lower() not in SOURCE_CODE_SUFFIXES:
+        return []  # 后缀/存在性问题由 provenance_failures 以 FAIL 级报告，此处不重复
+    try:
+        source_mtime = source.stat().st_mtime
+    except OSError:
+        return []
+    warnings: list[str] = []
+    for artifact in provenance.get("output_artifacts", []) or []:
+        artifact_path = resolve_artifact(artifact)
+        if not artifact_path.exists():
+            continue
+        try:
+            artifact_mtime = artifact_path.stat().st_mtime
+        except OSError:
+            continue
+        if source_mtime > artifact_mtime:
+            warnings.append(
+                f"源码 {source.name} 比产物 {artifact} 新（源 mtime 晚于产物）——"
+                f"源码改后可能未重跑，结果可能过期，建议重跑后再冻结数字"
+            )
+    return warnings
 
 
 def check_code_quality(item: dict[str, Any]) -> list[str]:
@@ -409,28 +473,40 @@ def task_items(data: Any) -> dict[str, list[dict[str, Any]]]:
 
 
 def evaluate() -> dict[str, Any]:
+    figure_index_path = first_existing(FIGURE_INDEX_CANDIDATES)
+    table_index_path = first_existing(TABLE_INDEX_CANDIDATES)
     model_route = load_json(MODEL_ROUTE_FILE)
-    figure_index = load_json(FIGURE_INDEX_FILE)
+    figure_index = load_json(figure_index_path)
     model_results = load_json(MODEL_RESULTS_FILE)
     metrics = load_json(METRICS_FILE)
     conclusions = load_json(CONCLUSIONS_FILE)
-    table_index = load_json(TABLE_INDEX_FILE)
+    table_index = load_json(table_index_path)
     tasks = load_json(TASKS_FILE)
 
     failures: list[str] = []
     warnings: list[str] = []
 
-    for path, data in (
-        (MODEL_ROUTE_FILE, model_route),
-        (FIGURE_INDEX_FILE, figure_index),
-        (MODEL_RESULTS_FILE, model_results),
-        (METRICS_FILE, metrics),
-        (CONCLUSIONS_FILE, conclusions),
-        (TABLE_INDEX_FILE, table_index),
-        (TASKS_FILE, tasks),
+    for path, data, candidates in (
+        (MODEL_ROUTE_FILE, model_route, None),
+        (figure_index_path, figure_index, FIGURE_INDEX_CANDIDATES),
+        (MODEL_RESULTS_FILE, model_results, None),
+        (METRICS_FILE, metrics, None),
+        (CONCLUSIONS_FILE, conclusions, None),
+        (table_index_path, table_index, TABLE_INDEX_CANDIDATES),
+        (TASKS_FILE, tasks, None),
     ):
         if data is None:
-            failures.append(f"缺少证据门禁输入文件：{path.relative_to(BASE_DIR) if path.is_relative_to(BASE_DIR) else path}")
+            # P2-16：双候选索引缺失时把候选清单列进报错，与 completeness 口径互认
+            if candidates:
+                tried = " / ".join(
+                    str(c.relative_to(BASE_DIR)) if c.is_relative_to(BASE_DIR) else str(c)
+                    for c in candidates
+                )
+                failures.append(f"缺少证据门禁输入文件：{tried}（已查全部候选均不存在）")
+            else:
+                failures.append(
+                    f"缺少证据门禁输入文件：{path.relative_to(BASE_DIR) if path.is_relative_to(BASE_DIR) else path}"
+                )
         elif isinstance(data, dict) and data.get("__error__"):
             failures.append(f"无法读取证据门禁输入文件：{path} ({data['__error__']})")
 
@@ -489,6 +565,9 @@ def evaluate() -> dict[str, Any]:
             # ★ 新增：代码质量检查
             for code_warning in check_code_quality(result):
                 q_warnings.append(code_warning)
+            # ★ P2-13：源码 mtime 晚于产物的漂移检测（WARNING 级：如实分级，不 FAIL）
+            for drift_warning in provenance_drift_warnings(result):
+                q_warnings.append(drift_warning)
 
         if not q_metrics:
             q_failures.append("缺少 metrics.json 中的评价指标")
@@ -589,6 +668,37 @@ def write_reports(report: dict[str, Any], mode: str) -> None:
     REPORT_MD.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
 
 
+def record_freshness(report_path: Path, sources: list[Path]) -> list[str]:
+    """报告落盘后为其记录源哈希（P1-11 真接线，消灭 record 空转）。
+
+    - 只绑定本门禁的核心依赖（索引/tasks/results 关键件），不绑定全量源；
+    - 失败不 FAIL：freshness 记录是附加元数据，失败降级为报告内 warning 一行
+      + stdout 提示，绝不改变门禁本身的 PASS/FAIL 判定（如实分级）；
+    - 返回需并入报告 warnings 的降级消息（空列表 = 记录成功）。
+    """
+    existing = [s for s in sources if s.exists()]
+    if not existing or not FRESHNESS_SCRIPT.exists():
+        print("[fresh] 跳过 source_hash 记录（无已存在的依赖源或 freshness_check.py 不存在）")
+        return []
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(FRESHNESS_SCRIPT), "record", str(report_path),
+             "--sources", *[str(s) for s in existing]],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
+        )
+        if proc.returncode == 0:
+            tail = (proc.stdout or "").strip().splitlines()
+            msg = tail[-1].removeprefix("[fresh] ") if tail else "source_hash 已记录"
+            print(f"[fresh] {msg}")
+            return []
+        lines = (proc.stderr or proc.stdout or "").strip().splitlines()
+        reason = lines[-1] if lines else f"rc={proc.returncode}"
+    except Exception as exc:  # noqa: BLE001 —— 记录失败必须降级，不得击穿门禁
+        reason = str(exc)
+    print(f"[fresh] ⚠ 记录哈希失败（不阻断门禁）：{reason}")
+    return [f"freshness record 失败，本报告未绑定 source_hash：{reason}"]
+
+
 def main() -> int:
     configure_utf8_stdio()
     parser = argparse.ArgumentParser(description="Check whether MathModel Skill evidence is ready for formal writing.")
@@ -602,6 +712,37 @@ def main() -> int:
 
     report = evaluate()
     write_reports(report, args.mode)
+
+    # P1-11：报告落地即绑定源哈希——只绑本门禁的核心依赖（索引/tasks/results 关键件）；
+    # record 失败降级为 warning，不改变门禁判定。
+    downgrade = record_freshness(
+        REPORT_JSON,
+        [
+            MODEL_ROUTE_FILE,
+            first_existing(FIGURE_INDEX_CANDIDATES),
+            MODEL_RESULTS_FILE,
+            METRICS_FILE,
+            CONCLUSIONS_FILE,
+            first_existing(TABLE_INDEX_CANDIDATES),
+            TASKS_FILE,
+        ],
+    )
+    if downgrade:
+        # record 可能已改写 JSON；重读追加 warning 后同步双写（JSON + MD）
+        try:
+            on_disk = json.loads(REPORT_JSON.read_text(encoding="utf-8"))
+            if isinstance(on_disk, dict):
+                on_disk.setdefault("warnings", []).extend(downgrade)
+                REPORT_JSON.write_text(json.dumps(on_disk, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+        try:
+            with REPORT_MD.open("a", encoding="utf-8") as fh:
+                fh.write("\n## Warnings (freshness record)\n\n")
+                for message in downgrade:
+                    fh.write(f"- {message}\n")
+        except Exception:
+            pass
 
     print(f"证据门禁报告：{REPORT_MD}")
     if report["status"] == "PASS":

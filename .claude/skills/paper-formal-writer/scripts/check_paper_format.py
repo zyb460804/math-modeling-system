@@ -8,8 +8,16 @@ from typing import Any
 
 from docx import Document
 
+from _project_root import ProjectRootNotFoundError, find_project_root
 
-BASE_DIR = Path.cwd()
+# M-13（未收口 #9）锚定统一：由文件位置上溯定位项目根，替代 Path.cwd()——
+# 从任意 cwd 运行都锚定真实 paper_output/；错误 cwd 不再读错源稿/写错报告/
+# 凭空创建 paper_output 树；脚本被复制到项目外时启动即报错（见 _project_root.py）。
+try:
+    BASE_DIR = find_project_root()
+except ProjectRootNotFoundError as exc:
+    print(f"[ANCHOR FAILED] {exc}", file=sys.stderr)
+    raise SystemExit(2)
 OUTPUT_DIR = BASE_DIR / "paper_output"
 SOURCE_FILE = OUTPUT_DIR / "final_paper_source.md"
 FALLBACK_SOURCE_FILE = OUTPUT_DIR / "final_paper.md"
@@ -152,13 +160,28 @@ def qids_from_outline(outline: Any) -> list[str]:
 
 
 def load_first(*paths: Path) -> Any:
-    """按候选路径加载 JSON，第一个存在的胜出（索引文件根/子目录双布局兼容）"""
+    """按候选路径加载 JSON（索引文件根/子目录双布局兼容）。
+
+    M-13-LOW（load_first 无 mtime 裁决）修复：旧逻辑"第一个存在且合法者胜出"，
+    双布局两份索引并存时固定取先传的根路径——根目录残留的陈旧索引会压过
+    子目录新索引。现改为：全部存在且可解析的候选中取 mtime 最新者；
+    仅一份时行为与旧版一致（存在的第一份即胜出）。
+    """
+    candidates: list[tuple[float, dict[str, Any]]] = []
     for path in paths:
-        if path.exists():
-            data = load_json(path)
-            if isinstance(data, dict) and "__error__" not in data:
-                return data
-    return {}
+        if not path.exists():
+            continue
+        data = load_json(path)
+        if isinstance(data, dict) and "__error__" not in data:
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                mtime = -1.0  # stat 竞态失败时退化为最低优先，不中断加载
+            candidates.append((mtime, data))
+    if not candidates:
+        return {}
+    # max 在 mtime 并列时保留先出现的候选 → 与旧版"先根后子"顺序一致（稳定）
+    return max(candidates, key=lambda pair: pair[0])[1]
 
 
 def item_id(item: dict[str, Any], *id_keys: str) -> str:

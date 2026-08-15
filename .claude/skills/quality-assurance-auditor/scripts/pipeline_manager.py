@@ -153,6 +153,7 @@ def _replace_line(content: str, line_idx: int, replacement: str) -> str:
     旧的 str.replace(mark, ..., 1) 会命中模板说明行里的标记子串，真标记行
     未被消费 → 一次人工批准连放两个阶段（第二轮审查 B7）。此处只动
     "整行恰为标记"的那一行，模板说明行里的子串不受影响。
+    每次替换保持行数不变（整行→整行），因此对多个行号顺序替换不互相错位。
     """
     lines = content.splitlines()
     if not (0 <= line_idx < len(lines)):
@@ -160,6 +161,36 @@ def _replace_line(content: str, line_idx: int, replacement: str) -> str:
     lines[line_idx] = replacement
     out = "\n".join(lines)
     return out + "\n" if content.endswith("\n") else out
+
+
+def _consume_markers(content: str, relevant: list, stage: str) -> str:
+    """把该阶段全部生效标记行整行改写为带时间戳的消费记录（第三轮审查 MEDIUM-A）。
+
+    旧逻辑只消费 _approval_state 返回的 relevant[-1]（生效行）——同阶段文件中
+    存在两个 [APPROVED S5] 时前一个残留，该阶段 rework 再入 pending_review 后
+    无需人工即被残留标记自动放行。此处把 relevant 中每一行（全局形态 + 记号
+    匹配该阶段的每一行）一并消费。消费记录形如 "[APPROVED — stage @ time]"，
+    不等于任何标记形态（em dash 不在绑定记号字符类内），不会二次放行。
+    """
+    out = content
+    for line_idx, kind, _tok in relevant:
+        out = _replace_line(out, line_idx, f"[{kind} — {stage} @ {now()}]")
+    return out
+
+
+def _read_human_file() -> str | None:
+    """单次读取 HUMAN_FILE，返回内容快照；不存在/读失败返回 None。
+
+    B7 TOCTOU 修复（第三轮审查 LOW）：advance 的判定与消费必须共享同一份
+    content 快照（读-改-写原子化到单进程视角）——旧实现 _approval_state 读
+    一次、消费前再读一次，两次读之间文件被外部改动会 _replace_line 改错行。
+    """
+    if not HUMAN_FILE.exists():
+        return None
+    try:
+        return HUMAN_FILE.read_text(encoding="utf-8")
+    except OSError:
+        return None
 
 
 def _sanitize(text: str) -> str:
@@ -392,7 +423,7 @@ def cmd_check_approval(args: argparse.Namespace) -> str:
     [APPROVED <stage>]/【APPROVED <stage>】）才算批准；行内混排一律不算。
     --stage 指定阶段时，绑定其它阶段的标记对本阶段不生效。"""
     stage = (args.stage or "").strip()
-    verdict, detail, bound, _ = _approval_state(stage)
+    verdict, detail, bound, _line_idx, _relevant = _approval_state(stage)
     print(verdict)
     if bound:
         print(f"(标记绑定阶段记号: {bound})")
@@ -401,39 +432,51 @@ def cmd_check_approval(args: argparse.Namespace) -> str:
     return verdict
 
 
-def _approval_state(stage: str = "") -> tuple[str, str, str, int]:
+def _approval_state(
+    stage: str = "", content: str | None = None
+) -> tuple[str, str, str, int, list]:
     """读取 HUMAN_FILE 判定审批状态（检测器与消费端共用同一解析器）。
 
-    返回 (verdict, detail, bound, line_idx)：
+    返回 (verdict, detail, bound, line_idx, relevant)：
       - verdict ∈ {APPROVED, REWORK, PENDING}
       - detail：REWORK 时为标记行下一行起的修改意见；PENDING 时为原因说明
       - bound：生效标记的绑定记号（""=全局形态）
       - line_idx：生效标记行号（-1=无标记），advance 据此做行级精确消费
+      - relevant：该阶段全部生效标记 [(行号, APPROVED|REWORK, 绑定记号)]——
+        消费端（advance/rework）必须整组一并消费：只消费 relevant[-1] 会留下
+        前面的同阶段重复标记（第三轮审查 MEDIUM-A：残留标记在 rework 再入
+        pending_review 后无需人工即自动放行）
 
-    规则（CR-6 + 第二轮审查 B）：
+    规则（CR-6 + 第二轮审查 B + 第三轮审查 A/B）：
       - 标记必须独占一行；支持全局 [APPROVED] 与指定 [APPROVED <stage>] 两种形态
       - stage 非空时只统计与该阶段相关的标记（全局形态 + 记号匹配该阶段）；
         绑定其它阶段的标记对本阶段不生效
       - 最后写入优先：APPROVED 与 REWORK 并存时，文件中位置靠后的标记生效
+      - content 非 None 时直接基于该快照判定，不再重读文件（B7 TOCTOU：读与
+        写之间文件被外部改动会导致 _replace_line 改错行；消费端应传同一份快照）
     """
-    if not HUMAN_FILE.exists():
-        return "PENDING", "（human_intervention.md 不存在）", "", -1
-    content = HUMAN_FILE.read_text(encoding="utf-8")
+    if content is None:
+        if not HUMAN_FILE.exists():
+            return "PENDING", "（human_intervention.md 不存在）", "", -1, []
+        try:
+            content = HUMAN_FILE.read_text(encoding="utf-8")
+        except OSError as e:
+            return "PENDING", f"（human_intervention.md 读取失败: {e}）", "", -1, []
     markers = _scan_marker_lines(content)
     if not markers:
-        return "PENDING", "（未检测到任何独占一行的审批标记）", "", -1
+        return "PENDING", "（未检测到任何独占一行的审批标记）", "", -1, []
     if stage:
         relevant = [m for m in markers if not m[2] or _token_matches_stage(m[2], stage)]
     else:
-        relevant = markers
+        relevant = list(markers)
     if not relevant:
         others = "、".join(f"{kind}@{tok or '全局'}" for _, kind, tok in markers)
-        return "PENDING", f"现有标记均绑定其它阶段（{others}），与 {stage} 无关", "", -1
+        return "PENDING", f"现有标记均绑定其它阶段（{others}），与 {stage} 无关", "", -1, []
     line_idx, kind, bound = relevant[-1]  # 行号升序 → 最后一个即文件中最靠后者
     if kind == "APPROVED":
-        return "APPROVED", "", bound, line_idx
+        return "APPROVED", "", bound, line_idx, relevant
     feedback = "\n".join(content.splitlines()[line_idx + 1:]).strip()
-    return "REWORK", feedback, bound, line_idx
+    return "REWORK", feedback, bound, line_idx, relevant
 
 
 def _print_approval_guidance(reason: str) -> None:
@@ -468,7 +511,11 @@ def cmd_advance(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
-    verdict, detail, bound, line_idx = _approval_state(stage)
+    # B7 TOCTOU 修复（第三轮审查 LOW）：读-判-写共享同一份 content 快照。
+    # 旧实现 _approval_state 读一次、消费前再读一次，两次读之间文件被外部
+    # 改动会 _replace_line 改错行；现判定与消费均基于同一份快照。
+    content = _read_human_file()
+    verdict, detail, bound, _line_idx, relevant = _approval_state(stage, content)
     if verdict != "APPROVED":
         reason = {
             "REWORK": f"审查结论为 REWORK（请先按修改意见返工，再重新提交审查）\n{detail}",
@@ -513,10 +560,11 @@ def cmd_advance(args: argparse.Namespace) -> None:
     # B7 修复：行级精确消费——把"生效标记行"整行改写为带时间戳的消费记录。
     # 旧 str.replace(mark, ..., 1) 会命中模板说明行里的标记子串，真标记行
     # 未被消费 → 一次批准连放两个阶段。改写后的行不再等于任何标记，不会二次放行。
-    if HUMAN_FILE.exists() and line_idx >= 0:
-        content = HUMAN_FILE.read_text(encoding="utf-8")
-        consumed = _replace_line(content, line_idx, f"[APPROVED — {stage} @ {now()}]")
-        HUMAN_FILE.write_text(consumed, encoding="utf-8")
+    # 第三轮审查 MEDIUM-A：消费的是该阶段全部生效标记行（含绑定匹配的每一行），
+    # 且基于开头读入的同一份 content 快照改写——同阶段残留的重复 [APPROVED S5]
+    # 一并清除，rework 再入 pending_review 后不会免人工自动放行。
+    if content is not None and relevant:
+        HUMAN_FILE.write_text(_consume_markers(content, relevant, stage), encoding="utf-8")
 
 
 def cmd_rework(args: argparse.Namespace) -> None:
@@ -551,13 +599,13 @@ def cmd_rework(args: argparse.Namespace) -> None:
 
     if HUMAN_FILE.exists():
         # B7 同源修复：与 advance 同口径——只把"生效 REWORK 标记行"整行消费为
-        # "[REWORK — stage @ time]"，绝不 str.replace（会命中模板说明行子串）
-        verdict, _, _, line_idx = _approval_state(stage)
-        if verdict == "REWORK" and line_idx >= 0:
-            content = HUMAN_FILE.read_text(encoding="utf-8")
+        # "[REWORK — stage @ time]"，绝不 str.replace（会命中模板说明行子串）。
+        # 第三轮审查 A/B 同步：整组 relevant 一并消费 + 读-判-写共享同一份快照
+        content = _read_human_file()
+        verdict, _detail, _bound, _line_idx, relevant = _approval_state(stage, content)
+        if verdict == "REWORK" and content is not None and relevant:
             HUMAN_FILE.write_text(
-                _replace_line(content, line_idx, f"[REWORK — {stage} @ {now()}]"),
-                encoding="utf-8",
+                _consume_markers(content, relevant, stage), encoding="utf-8"
             )
 
 

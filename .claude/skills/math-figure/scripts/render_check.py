@@ -22,6 +22,12 @@
     本脚本基于成品位图无法可靠测量字号/重叠/清晰度，不再假装 PASS——
     文字重叠由 math-figure/scripts/figqa.py::assert_no_overlap 碰撞门承接
     （出图脚本 savefig 前已接线），字号与标签清晰度需人工确认。
+
+check-all 口径统一（2026-08-15，第三轮审查 E）：
+    - 汇总中 warned>0 → rc=1（与单图 check 对 WARN rc=1 同口径；旧版只数
+      failed，同一张 WARN 图单图 rc=1 而 check-all rc=0，口径分裂）
+    - PASS_WITH_SKIP 仍 rc=0（部分检查项未实现自动检测 ≠ 质量告警）
+    - 目标目录不存在 → rc=1 并明示（旧版 rc=0 + "总计 0" 是假绿）
 """
 
 import argparse
@@ -251,13 +257,16 @@ def check_matplotlib_figure(figure_path: Path) -> dict:
 def check_all_figures(figures_dir: Path) -> dict:
     """检查指定目录下的所有图表"""
     if not figures_dir.exists():
+        # 第三轮审查 LOW：目录不存在必须可判失败（dir_missing 标志 → main rc=1），
+        # 旧版 rc=0 + "总计 0" 把"什么都没查"当绿灯
         return {
             "total": 0,
             "passed": 0,
             "warned": 0,
             "failed": 0,
             "results": {},
-            "error": f"figures目录不存在: {figures_dir}"
+            "error": f"figures目录不存在: {figures_dir}",
+            "dir_missing": True,
         }
 
     results = {}
@@ -465,7 +474,17 @@ def main():
         print(f"警告: {results['warned']}")
         print(f"失败: {results['failed']}")
 
-        sys.exit(0 if results["failed"] == 0 else 1)
+        # 第三轮审查 LOW：目标目录不存在 → rc=1 并明示（旧版 rc=0 "总计 0" 假绿）
+        if results.get("dir_missing"):
+            print("\n❌ 目标目录不存在——本次未检查任何图表（≠ 通过），rc=1")
+            sys.exit(1)
+
+        # 第三轮审查 E：check-all 与单图 check 口径统一——WARN 计入失败判定
+        # （旧版只数 failed，同一张 WARN 图单图 rc=1 而 check-all rc=0）；
+        # PASS_WITH_SKIP 仍 rc=0（未实现自动检测 ≠ 质量告警）
+        if results["warned"] > 0:
+            print(f"\n⚠️ {results['warned']} 个图表为 WARN 级：与单图 check 同口径计入失败判定，rc=1")
+        sys.exit(0 if (results["failed"] == 0 and results["warned"] == 0) else 1)
 
     else:
         parser.print_help()

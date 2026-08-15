@@ -14,7 +14,14 @@
 
 用法：
   python freshness_check.py record paper_output/qa/evidence_gate_report.json
+  python freshness_check.py record paper_output/qa/verify_gate_report.json \
+      --sources paper_output/code/verifications paper_output/code/modeling
   python freshness_check.py check
+
+--sources（record 可选）：显式指定该报告依赖的源文件/目录（各门禁只绑定自己的
+核心依赖，而非全量 SOURCE_GLOBS）。record 会把源清单写进报告的
+source_hash_sources 字段，check 据此按报告各自重算——不带该字段的旧报告
+仍按默认 SOURCE_GLOBS 比对（向后兼容）。
 """
 from __future__ import annotations
 
@@ -51,10 +58,19 @@ def _hash_file(p: Path) -> str:
 
 
 def _hash_dir(d: Path) -> str:
-    """聚合一个目录下所有文件的 SHA-256（排序后拼接哈希）。"""
+    """聚合一个目录下所有文件的 SHA-256（排序后拼接哈希）。
+
+    排除 __pycache__ 与 .pyc/.pyc.py3k/.pyo：字节码随解释器/环境波动，
+    与"源是否变化"无关，混入会造成假 STALE。
+    """
     if not d.exists():
         return ""
-    files = sorted([f for f in d.rglob("*") if f.is_file()])
+    files = sorted([
+        f for f in d.rglob("*")
+        if f.is_file()
+        and "__pycache__" not in f.parts
+        and f.suffix not in (".pyc", ".pyo")
+    ])
     h = hashlib.sha256()
     for f in files:
         rel = str(f.relative_to(d)).replace("\\", "/")
@@ -65,14 +81,21 @@ def _hash_dir(d: Path) -> str:
     return h.hexdigest()
 
 
-def compute_source_hash() -> dict:
-    """计算所有源的哈希指纹。"""
+def compute_source_hash(sources: list[Path] | None = None) -> dict:
+    """计算源哈希指纹。sources 为空 → 默认 SOURCE_GLOBS（全量源，键=目录/文件名）；
+    显式传入 → 只哈希指定路径（键=posix 路径串，record/check 两端同源派生，可比）。
+    不存在的源跳过：record 后新增文件 / 删除文件都会改变 parts → 触发 STALE，
+    这正是"依赖集变化=报告过期"的预期语义。
+    """
+    targets = [Path(s) for s in sources] if sources else list(SOURCE_GLOBS)
     parts: dict[str, str] = {}
-    for src in SOURCE_GLOBS:
-        if src.exists() and src.is_dir():
-            parts[src.name] = _hash_dir(src)
-        elif src.exists() and src.is_file():
-            parts[src.name] = _hash_file(src)
+    for src in targets:
+        if src.is_dir():
+            key = src.as_posix()
+            parts[key] = _hash_dir(src)
+        elif src.is_file():
+            key = src.as_posix()
+            parts[key] = _hash_file(src)
     merged = hashlib.sha256(
         "|".join(f"{k}={v}" for k, v in sorted(parts.items())).encode("utf-8")
     ).hexdigest()
@@ -91,18 +114,30 @@ def cmd_record(args: argparse.Namespace) -> int:
         return 1
     if not isinstance(data, dict):
         data = {"payload": data}
-    snap = compute_source_hash()
+    sources = [Path(s) for s in args.sources] if args.sources else None
+    snap = compute_source_hash(sources)
     data["source_hash"] = snap["source_hash"]
     data["source_hash_parts"] = snap["parts"]
     data["source_hash_at"] = snap["computed_at"]
+    if sources is not None:
+        # check 端按报告各自的源清单重算，而非全量 SOURCE_GLOBS
+        data["source_hash_sources"] = [s.as_posix() for s in sources]
     report.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[fresh] 已为 {report.name} 记录 source_hash = {snap['source_hash'][:12]}…")
+    scope = f"（自定义源 {len(snap['parts'])} 项）" if sources is not None else "（默认全量源）"
+    print(f"[fresh] 已为 {report.name} 记录 source_hash = {snap['source_hash'][:12]}… {scope}")
     return 0
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    current = compute_source_hash()
-    print(f"[fresh] 当前源指纹: {current['source_hash'][:12]}…\n")
+    default_snap: dict | None = None  # 惰性缓存：无自定义源的报告共用默认全量指纹
+
+    def _default() -> dict:
+        nonlocal default_snap
+        if default_snap is None:
+            default_snap = compute_source_hash()
+        return default_snap
+
+    print(f"[fresh] 默认源指纹: {_default()['source_hash'][:12]}…\n")
 
     reports = [Path(args.report)] if args.report else sorted(QA_DIR.glob("*.json")) if QA_DIR.exists() else []
     if not reports:
@@ -120,6 +155,12 @@ def cmd_check(args: argparse.Namespace) -> int:
         if not isinstance(data, dict) or "source_hash" not in data:
             no_hash.append(r.name)
             continue
+        recorded_sources = data.get("source_hash_sources")
+        if isinstance(recorded_sources, list) and recorded_sources:
+            # record --sources 记录的报告：按它自己的源清单重算（门禁报告只绑定各自依赖）
+            current = compute_source_hash([Path(s) for s in recorded_sources])
+        else:
+            current = _default()
         if data["source_hash"] != current["source_hash"]:
             stale.append(r.name)
         else:
@@ -141,6 +182,8 @@ def main() -> int:
     sub = p.add_subparsers(dest="cmd")
     pr = sub.add_parser("record", help="为报告写入 source_hash")
     pr.add_argument("report")
+    pr.add_argument("--sources", nargs="+", default=None, metavar="PATH",
+                    help="该报告依赖的源文件/目录（默认全量 SOURCE_GLOBS）；写入 source_hash_sources 供 check 按报告重算")
     pc = sub.add_parser("check", help="比对报告新鲜度")
     pc.add_argument("report", nargs="?", default=None)
     args = p.parse_args()

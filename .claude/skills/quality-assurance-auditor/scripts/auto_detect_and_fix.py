@@ -11,12 +11,17 @@
     python auto_detect_and_fix.py --stage format        # S6: 格式门禁
     python auto_detect_and_fix.py --stage consistency   # S7: 一致性审计
     python auto_detect_and_fix.py --stage completeness  # S7: 完整性审计
-    python auto_detect_and_fix.py --stage all           # 全部检测
+    python auto_detect_and_fix.py --stage all           # 全部检测（不含 code_style，见 DETECTORS 注）
     python auto_detect_and_fix.py --stage s5            # S5阶段全部
     python auto_detect_and_fix.py --stage s7            # S7阶段全部
+    python auto_detect_and_fix.py --stage code_style    # 仅显式可用（不在 all 展开内）
+
+三态（第三轮审查 MEDIUM-C 修复）：
+    每项检测 = pass（真通过）/ skip（未实际检查：缺 qa_config、缺产物等，
+    rc=0 但 stdout 行首 SKIP——绝不冒充"检测通过"）/ fail（失败）。
 
 返回码:
-    0 = 检测通过（或自动修复后通过）
+    0 = 无失败项（含 SKIP 项时 stdout 会明示 [--] SKIP，未实际检查 ≠ 通过）
     1 = 检测失败（需人工介入）
 """
 
@@ -25,6 +30,14 @@ import subprocess
 import sys
 from pathlib import Path
 from datetime import datetime
+
+# Windows GBK 控制台兼容：强制 stdout/stderr 走 utf-8（三态 [--] SKIP 的明示文案含中文，
+# 乱码会让"未实际检查 ≠ 通过"的披露不可读——与 pipeline_manager.py 同款处理）
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+except Exception:
+    pass
 
 ROOT = Path(__file__).resolve().parents[4]
 QA_DIR = ROOT / "paper_output" / "qa"
@@ -129,9 +142,15 @@ DETECTORS = {
     "code_style": {
         "script": CORRECTORS_DIR / "code_style_auto_fixer.py",
         "fixer": CORRECTORS_DIR / "code_style_auto_fixer.py",
-        "description": "代码风格检查",
+        "description": "代码风格检查（仅显式 --stage code_style 可用，不在 all 展开内）",
         "max_rounds": 1,
         "combined": True,
+        # D 修复（第三轮审查 MEDIUM，死通道）：code_style_auto_fixer.py 设计上必须
+        # 显式传目标（--file/--errors/--fix-all），无参运行必 rc=1（"请指定 ..."），
+        # 且其退出码语义与"检测"不兼容（rc=0 表示"改了 N 个文件"，0 处可改反而
+        # rc=1）——旧版把它算进 --stage all 使 all 永败。现 --stage all 不再展开
+        # code_style，仅显式指定时可用（见 main 的 all 分支）。
+        "explicit_only": True,
     },
 }
 
@@ -171,8 +190,31 @@ def run_script(script_path: Path, extra_args: list = None) -> tuple:
         return False, f"脚本执行异常: {e}"
 
 
-def detect_and_fix(stage: str, config: dict) -> bool:
-    """检测+修复单个阶段"""
+def _skip_reason(output: str) -> str | None:
+    """rc=0 的输出是否实为 SKIP（第三轮审查 MEDIUM-C 修复）。
+
+    口径复制自 tools/quality_gate/pipeline_runner.py::classify_script_result
+    （SKIP_STATUSES 含 PASS_WITH_SKIP；SKIP 识别 = stdout 任一行 strip 后以
+    skip / [skip] 开头，大小写不敏感）。不跨目录 import：两处独立演化时以
+    runner 为准同步。旧版只看 rc——number/result/parameter 缺 qa_config 时
+    rc=0 却被打印成"[OK] 检测通过"，把"未实际检查"冒充成"通过"。
+    覆盖：check_number/parameter/result 的行首 "SKIP（...）：..."、
+    check_numeric_sanity 的行首 "[skip] ..."。
+    """
+    for ln in output.splitlines():
+        low = ln.strip().lower()
+        if low.startswith("skip") or low.startswith("[skip]"):
+            return ln.strip()
+    return None
+
+
+def detect_and_fix(stage: str, config: dict) -> str:
+    """检测+修复单个阶段。返回三态："pass" | "skip" | "fail"。
+
+    - "pass"：rc=0 且输出无 SKIP 行（真通过）
+    - "skip"：rc=0 但输出行首 SKIP（未实际检查 ≠ 通过，不再冒充 [OK]）
+    - "fail"：rc≠0（含检测脚本不存在/超时/异常），走修复轮
+    """
     max_rounds = config.get("max_rounds", 2)
     is_combined = config.get("combined", False)
 
@@ -188,8 +230,12 @@ def detect_and_fix(stage: str, config: dict) -> bool:
         passed, output = run_script(config["script"], config.get("args"))
 
         if passed:
+            skip_line = _skip_reason(output)
+            if skip_line:
+                print(f"  [--] SKIP（未实际检查 ≠ 通过）：{skip_line}")
+                return "skip"
             print(f"  [OK] 检测通过")
-            return True
+            return "pass"
 
         # 检测失败，提取错误信息
         errors = []
@@ -211,13 +257,13 @@ def detect_and_fix(stage: str, config: dict) -> bool:
                 # 移除可能导致编码问题的字符
                 safe_err = err.encode('ascii', 'replace').decode('ascii')
                 print(f"    - {safe_err[:100]}")
-            return False
+            return "fail"
 
         # 修复
         fixer = config.get("fixer")
         if not fixer or not fixer.exists():
             print(f"  [!] 无自动修复器")
-            return False
+            return "fail"
 
         print(f"  [#] 自动修复...")
 
@@ -240,21 +286,24 @@ def detect_and_fix(stage: str, config: dict) -> bool:
         else:
             print(f"  [!] 修复未完全成功，进入下一轮")
 
-    return False
+    return "fail"
 
 
 def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="自动检测+修复包装器")
-    parser.add_argument("--stage", required=True, help="检测阶段（code/number/result/evidence/parameter/format/consistency/completeness/figure/latex/citation/aigc/symbol/code_style/s4/s5/s6/s7/all）")
+    parser.add_argument("--stage", required=True, help="检测阶段（code/number/result/evidence/parameter/format/consistency/completeness/figure/latex/citation/aigc/symbol/code_style/s4/s5/s6/s7/all——all 不含 code_style，后者仅显式可用）")
     parser.add_argument("--max-rounds", type=int, help="最大修正轮数（覆盖默认值）")
     args = parser.parse_args()
 
     # 解析阶段
     stage = args.stage.lower()
     if stage == "all":
-        stages = list(DETECTORS.keys())
+        # D 修复（第三轮审查 MEDIUM）：code_style 是死通道（无参必 rc=1，
+        # 且其退出码语义与检测不兼容，见 DETECTORS["code_style"] 注），
+        # 移出 --stage all 的展开，仅显式 --stage code_style 可用。
+        stages = [k for k in DETECTORS if not DETECTORS[k].get("explicit_only")]
     elif stage in STAGE_GROUPS:
         stages = STAGE_GROUPS[stage]
     elif stage in DETECTORS:
@@ -267,7 +316,7 @@ def main():
     print(f">>> 自动检测+修复")
     print(f"    阶段: {', '.join(stages)}")
 
-    # 运行
+    # 运行（results 值为三态 "pass" | "skip" | "fail"）
     results = {}
     for s in stages:
         config = DETECTORS[s].copy()
@@ -275,17 +324,19 @@ def main():
             config["max_rounds"] = args.max_rounds
         results[s] = detect_and_fix(s, config)
 
-    # 汇总
+    # 汇总（三态：通过 / SKIP / 失败）
     print(f"\n{'='*50}")
     print(f"[=] 汇总")
     print(f"{'='*50}")
 
-    all_passed = True
-    for s, passed in results.items():
-        status = "[OK]" if passed else "[!!]"
-        print(f"  {status} {DETECTORS[s]['description']}")
-        if not passed:
-            all_passed = False
+    status_marks = {"pass": "[OK]", "skip": "[--]", "fail": "[!!]"}
+    for s, r in results.items():
+        note = "（SKIP，未实际检查 ≠ 通过）" if r == "skip" else ""
+        print(f"  {status_marks[r]} {DETECTORS[s]['description']}{note}")
+
+    failed_stages = [s for s, r in results.items() if r == "fail"]
+    skipped_stages = [s for s, r in results.items() if r == "skip"]
+    all_passed = not failed_stages  # SKIP 不算失败，但也绝不冒充通过（上方 [--] 明示）
 
     # 保存日志
     log_file = QA_DIR / "auto_detect_fix_log.json"
@@ -295,16 +346,26 @@ def main():
             "timestamp": datetime.now().isoformat(),
             "stages": stages,
             "results": results,
+            "counts": {
+                "pass": sum(1 for r in results.values() if r == "pass"),
+                "skip": len(skipped_stages),
+                "fail": len(failed_stages),
+            },
             "all_passed": all_passed,
         }, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
     if all_passed:
-        print(f"\n[***] 全部通过！")
+        if skipped_stages:
+            # 全 SKIP（或 SKIP+PASS）时返回 0，但 stdout 必须明示：未实际检查 ≠ 通过
+            print(f"\n[--] 无失败项，但 {len(skipped_stages)} 项检测为 SKIP"
+                  f"（未实际检查 ≠ 通过）：{', '.join(skipped_stages)}")
+        else:
+            print(f"\n[***] 全部通过！")
         sys.exit(0)
     else:
-        print(f"\n[!] 部分阶段未通过，需人工介入")
+        print(f"\n[!] {len(failed_stages)} 项检测失败，需人工介入：{', '.join(failed_stages)}")
         sys.exit(1)
 
 

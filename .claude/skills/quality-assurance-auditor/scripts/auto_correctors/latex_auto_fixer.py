@@ -14,7 +14,16 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[5]
+from _project_root import ProjectRootNotFoundError, find_project_root
+
+# M-13（未收口 #9）锚定统一：parents[5] 硬编码层级 → 文件位置上溯定位项目根。
+# 旧形态病灶：脚本被复制到其它深度（沙箱）时 parents[5] 会指向沙箱外或
+# 真实树，造成"空沙箱却扫到/写到真实树"；新形态找不到项目根时启动即报错退出。
+try:
+    ROOT = find_project_root()
+except ProjectRootNotFoundError as exc:
+    print(f"[ANCHOR FAILED] {exc}", file=sys.stderr)
+    raise SystemExit(2)
 PAPER_SOURCE = ROOT / "paper_output" / "final_paper_source.md"
 FORMULA_INDEX = ROOT / "paper_output" / "tables" / "formula_index.json"
 

@@ -12,12 +12,17 @@ verifications/verify_*.py，验证约束满足/物理合理性/数值稳定性�
 退出码：0=全 PASS  1=有 FAIL  2=有 verify 缺失（含模型↔verify 对应缺失、模板生成失败）
 三态（报告 JSON status 字段 + SKIP 行）：PASS / FAIL / SKIP——无模型也无 verify 的空项目
 写显式 SKIP（未验证≠通过，不再伪装 PASS），rc 仍为 0，供 pipeline_runner 三态消费。
-空壳暴露：每脚本 assert 语句计数（n_assertions）与总计（n_assertions_total）写入报告与
-stdout——0 条 assert 的 rc=0 verify 一眼可见，只暴露不阻断。
+空壳暴露：每脚本 assert 语句计数写入报告与 stdout——n_assertions 为 AST 真实可执行断言数
+（ast.walk 统计 ast.Assert 节点，注释/字符串里的 assert 不算）；n_assert_text 保留字面计数作对照，
+两者并列暴露"字面多、AST 少=注释刷数可疑"。0 条（AST 口径）的 rc=0 verify 一眼可见。
+注意：计数是暴露指标非门禁——不据此放行也不据此阻断，评审/审计据此定位空壳自证。
+freshness 接线（P1-11）：报告写盘后自动调 freshness_check.py record --sources <本门禁依赖的
+verifications/ + modeling/ 目录>，为报告绑定源哈希；record 失败只降级为报告内 warning，不影响门禁判定。
 """
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import subprocess
@@ -32,9 +37,15 @@ except Exception:
 VERIFY_DIR = Path("paper_output/code/verifications")
 REPORT_FILE = Path("paper_output/qa/verify_gate_report.json")
 
-# assert 语句计数（只暴露不阻断）：识别"rc=0 但一条断言都没有"的橡皮图章 verify。
-# 负向后顾排除属性/标识符内的 assert（如 self_assert、x.assert），注释里的按字面计（近似即可）。
+# assert 字面计数（仅对照用）：识别"rc=0 但一条断言都没有"的橡皮图章 verify。
+# 负向后顾排除属性/标识符内的 assert（如 self_assert、x.assert）；注释/字符串里按字面计。
+# 真实计数以 AST 为准（count_assertion_stats），字面值只用来暴露"注释刷数"差异。
 ASSERT_RE = re.compile(r"(?<![\w.])assert\s")
+
+# freshness_check.py 位置（同仓 .claude/skills/ 下，按 __file__ 定位，不依赖 cwd）
+FRESHNESS_SCRIPT = (
+    Path(__file__).resolve().parents[2] / "context-memory-keeper" / "scripts" / "freshness_check.py"
+)
 
 
 def find_models(modeling_dir: Path) -> list[Path]:
@@ -88,22 +99,72 @@ def generate_skeletons() -> bool:
     return True
 
 
-def count_assertions(script: Path) -> int:
-    """统计单个 verify 脚本内的 assert 语句数。读不到源码返回 -1（区别于真的 0 条）。
+def count_assertion_stats(script: Path) -> tuple[int, int]:
+    """统计单个 verify 脚本的断言数，返回 (AST 真实数, 字面对照数)。
 
-    只计数、不阻断（G-01 残留暴露）：n_assertions 写入报告与 stdout，
-    评审/审计一眼可见空壳 verify（0 条 assert = 无任何自证内容却 rc=0）。
+    - AST 口径（n_assertions）：ast.walk 统计 ast.Assert 节点 = 真实可执行断言；
+      注释/字符串里的 assert 不算（P1-6：旧字面正则可被注释刷高）。
+    - 字面口径（n_assert_text）：旧正则计数保留作对照——字面多而 AST 少 = 注释刷数可疑。
+    读不到源码两个都返回 -1；AST 解析失败（语法错误）真实数返回 -1、字面数照常给出。
+    只计数不阻断：计数是暴露指标非门禁，评审据此定位空壳 verify。
     """
     try:
         src = script.read_text(encoding="utf-8", errors="replace")
     except Exception:
-        return -1
-    return len(ASSERT_RE.findall(src))
+        return -1, -1
+    n_text = len(ASSERT_RE.findall(src))
+    try:
+        tree = ast.parse(src)
+    except SyntaxError:
+        return -1, n_text
+    n_ast = sum(1 for node in ast.walk(tree) if isinstance(node, ast.Assert))
+    return n_ast, n_text
 
 
-def write_report(payload: dict) -> None:
+def record_freshness(report: Path, sources: list[Path]) -> None:
+    """
+报告写盘后为它记录源哈希（P1-11 真接线，消灭 record 空转）。
+
+    - 只绑定本门禁的核心依赖（verifications/ + modeling/），不绑定全量源；
+    - 失败不 FAIL：freshness 记录是附加元数据，其失败降级为报告内一行 warning
+      + stdout 提示，绝不让"哈希记录失败"变成门禁本身的 FAIL（如实分级）。
+    """
+    existing = [s for s in sources if Path(s).exists()]
+    if not existing or not FRESHNESS_SCRIPT.exists():
+        print(f"[gate] 跳过 freshness record（无已存在的依赖源或 freshness_check.py 不存在: {FRESHNESS_SCRIPT}）")
+        return
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(FRESHNESS_SCRIPT), "record", str(report),
+             "--sources", *[str(s) for s in existing]],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
+        )
+        if proc.returncode == 0:
+            tail = (proc.stdout or "").strip().splitlines()
+            msg = tail[-1].removeprefix("[fresh] ") if tail else "freshness source_hash 已记录"
+            print(f"[gate] {msg}")
+            return
+        reason = (proc.stderr or proc.stdout or "").strip().splitlines()
+        reason_text = reason[-1] if reason else f"rc={proc.returncode}"
+    except Exception as exc:  # noqa: BLE001 —— 记录失败必须降级，不得击穿门禁
+        reason_text = str(exc)
+    print(f"[gate] ⚠ 记录哈希失败（不阻断门禁）：{reason_text}")
+    try:  # 降级为报告内 warning：重新读盘追加（record 可能已改写文件）
+        data = json.loads(report.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            data.setdefault("warnings", []).append(
+                f"freshness record 失败，本报告未绑定 source_hash：{reason_text}"
+            )
+            report.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass  # 连追加都失败时只剩 stdout 痕迹，不再向上抛
+
+
+def write_report(payload: dict, sources: list[Path] | None = None) -> None:
     REPORT_FILE.parent.mkdir(parents=True, exist_ok=True)
     REPORT_FILE.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    # P1-11：报告落地后立即绑定源哈希（失败降级为 warning，不影响已写盘的报告语义）
+    record_freshness(REPORT_FILE, sources or [VERIFY_DIR])
 
 
 def run_one(script: Path) -> dict:
@@ -145,6 +206,9 @@ def main() -> int:
     p.add_argument("--modeling-dir", default="paper_output/code/modeling")
     args = p.parse_args()
 
+    # freshness 绑定源：本门禁的结论只依赖这两个目录（存在才绑定，见 record_freshness）
+    freshness_sources = [VERIFY_DIR, Path(args.modeling_dir)]
+
     def collect_verifies() -> list[Path]:
         return sorted(VERIFY_DIR.glob("verify_*.py")) if VERIFY_DIR.exists() else []
 
@@ -157,14 +221,15 @@ def main() -> int:
         print(f"[gate] 检测到 {len(missing)}/{len(models)} 个模型缺 verify，自动生成骨架…")
         if not generate_skeletons():
             write_report({"status": "FAIL", "n_models": len(models), "missing_verify": missing,
-                          "results": [], "note": "verification_template.py 缺失或运行失败，无法生成骨架"})
+                          "results": [], "note": "verification_template.py 缺失或运行失败，无法生成骨架"},
+                         freshness_sources)
             return 2
         scripts = collect_verifies()
         missing = missing_verify_for_models(models, scripts)
         if missing:
             print(f"[gate] 骨架生成后仍缺 {len(missing)} 个: {', '.join(missing)}")
             write_report({"status": "FAIL", "n_models": len(models), "missing_verify": missing,
-                          "results": [], "note": "骨架生成后仍缺配对 verify"})
+                          "results": [], "note": "骨架生成后仍缺配对 verify"}, freshness_sources)
             return 2
 
     # 对应关系校验（CR-3）：模型数 ↔ verify 数不匹配 → FAIL 并列缺失清单
@@ -173,7 +238,7 @@ def main() -> int:
         print(f"      缺失清单: {', '.join(missing)}")
         print("      按 verify_{模型名}.py 约定补齐，或用 --fix-missing 生成骨架")
         write_report({"status": "FAIL", "n_models": len(models), "missing_verify": missing,
-                      "results": [], "note": "模型↔verify 对应缺失，未运行任何自证"})
+                      "results": [], "note": "模型↔verify 对应缺失，未运行任何自证"}, freshness_sources)
         return 2
 
     if not scripts:
@@ -191,7 +256,7 @@ def main() -> int:
             "missing_verify": [],
             "results": [],
             "note": "无模型无 verify：显式 SKIP（未验证≠通过），非 PASS",
-        })
+        }, freshness_sources)
         print(f"[gate] 报告: {REPORT_FILE}")
         return 0
 
@@ -199,18 +264,29 @@ def main() -> int:
     results = []
     for s in scripts:
         r = run_one(s)
-        r["n_assertions"] = count_assertions(s)
+        n_ast, n_text = count_assertion_stats(s)
+        r["n_assertions"] = n_ast
+        r["n_assert_text"] = n_text
+        if n_text > 0 and n_ast == 0:
+            r["assert_count_suspect"] = True  # 字面有 assert 但 AST 无：注释/字符串刷数
         results.append(r)
         mark = "✓" if r["passed"] else "✗"
-        print(f"  {mark} {s.name}  (rc={r['returncode']}, asserts={r['n_assertions']})")
+        flag = "  ⚠ 字面≠AST（注释刷数可疑）" if r.get("assert_count_suspect") else ""
+        print(f"  {mark} {s.name}  (rc={r['returncode']}, asserts={n_ast}, assert_text={n_text}){flag}")
 
     n_pass = sum(1 for r in results if r["passed"])
     n_fail = len(results) - n_pass
     n_assertions_total = sum(r["n_assertions"] for r in results if r["n_assertions"] > 0)
+    n_assert_text_total = sum(r["n_assert_text"] for r in results if r["n_assert_text"] > 0)
     print(f"\n{'═' * 48}")
-    print(f"  G4.6 VERIFY GATE: {n_pass} PASS / {n_fail} FAIL / assert 语句共 {n_assertions_total} 条")
+    print(f"  G4.6 VERIFY GATE: {n_pass} PASS / {n_fail} FAIL")
+    print(f"  assert 真实（AST）共 {n_assertions_total} 条 / 字面（含注释）共 {n_assert_text_total} 条")
     if n_assertions_total == 0:
-        print("  ⚠ 全部 verify 合计 0 条 assert——空壳自证（不阻断，但评审必查）")
+        if n_assert_text_total > 0:
+            print(f"  ⚠ AST 真实 0 条 vs 字面 {n_assert_text_total} 条——注释/字符串刷数痕迹，空壳自证（不阻断，评审必查）")
+        else:
+            print("  ⚠ 全部 verify 合计 0 条 assert——空壳自证（不阻断，但评审必查）")
+    print("  （计数是暴露指标非门禁：不据此放行也不据此阻断）")
     print(f"{'═' * 48}")
 
     write_report({
@@ -220,9 +296,11 @@ def main() -> int:
         "n_pass": n_pass,
         "n_fail": n_fail,
         "n_assertions_total": n_assertions_total,
+        "n_assert_text_total": n_assert_text_total,
+        "assert_count_note": "n_assertions=AST 真实断言数（ast.Assert），n_assert_text=字面计数（含注释/字符串）；计数是暴露指标非门禁",
         "missing_verify": missing,
         "results": results,
-    })
+    }, freshness_sources)
     print(f"[gate] 报告: {REPORT_FILE}")
     return 0 if n_fail == 0 else 1
 

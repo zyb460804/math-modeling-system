@@ -45,7 +45,7 @@ def docx_stats(path: Path) -> dict:
             xml = z.read("word/document.xml").decode("utf-8", errors="replace")
     except Exception as exc:
         return {"error": str(exc), "tables": [], "drawings": 0, "paragraph_text": []}
-    drawings = len(re.findall(r"<w:drawing[\s>]", xml)) + xml.count("<w:drawing>")
+    drawings = len(re.findall(r"<w:drawing[ />]", xml))  # [ />] 同时覆盖 <w:drawing/> 自闭合形态
     tables = []
     for m in re.finditer(r"<w:tbl>.*?</w:tbl>", xml, re.S):
         cells = re.findall(r"<w:tc>.*?</w:tc>", m.group(0), re.S)
@@ -119,36 +119,64 @@ def check_artifacts(paper_dir: Path, require_table: bool = True, require_figures
         return [f"作品目录不存在: {paper_dir}"], [], []
 
     files = [f for f in paper_dir.rglob("*") if f.is_file()]
+    # 归档/沙箱/缓存目录不参与终检（防占位 docx 触发假 FAIL；仅匹配目录段，不影响同名文件）
+    files = [
+        f for f in files
+        if not any(
+            p == "__pycache__" or p == ".git" or p.startswith(("_archive", "_fixtest"))
+            for p in f.relative_to(paper_dir).parts[:-1]
+        )
+    ]
     docx_files = [f for f in files if f.suffix.lower() == ".docx" and "~$" not in f.name and "backup" not in f.name.lower()]
+    top_docx = [f for f in docx_files if f.parent == paper_dir]
+    deep_docx = [f for f in docx_files if f.parent != paper_dir]
     result_xlsx = [f for f in files if f.suffix.lower() == ".xlsx" and re.search(r"result", f.name, re.I)]
     all_xlsx = [f for f in files if f.suffix.lower() == ".xlsx"]
     code_files = [f for f in files if f.suffix.lower() in (".py", ".m", ".r", ".ipynb", ".java", ".jl")]
     fig_files = [f for f in files if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".svg", ".gif")]
 
-    # 1) 论文 docx 实物
+    # 1) 论文 docx 实物（主交付物 = paper_dir 顶层 docx；顶层为空时回退子目录。
+    #    顶层已有主交付物时，子目录 docx 仅登记不判定——归档/沙箱/其他赛题工作
+    #    目录里的同名占位 docx 不再触发"表格实体数为 0"假 FAIL）
+    def _rel(d: Path) -> str:
+        try:
+            return str(d.relative_to(paper_dir))
+        except ValueError:
+            return d.name
+
     if not docx_files:
         failures.append("未找到论文 docx 文件")
     else:
-        for d in docx_files:
+        for d in (top_docx if top_docx else deep_docx):
             st = docx_stats(d)
             if st["error"]:
-                failures.append(f"{d.name}: docx 解析失败 {st['error']}")
+                failures.append(f"{_rel(d)}: docx 解析失败 {st['error']}")
                 continue
             n_tables = len(st["tables"])
-            info.append(f"{d.name}: 表格实体 {n_tables} 个 / 图片 {st['drawings']} 张 / 段落 {len(st['paragraph_text'])} 段")
+            info.append(f"{_rel(d)}: 表格实体 {n_tables} 个 / 图片 {st['drawings']} 张 / 段落 {len(st['paragraph_text'])} 段")
             if require_table and n_tables == 0:
-                failures.append(f"{d.name}: 表格实体数为 0 —— 题面要求的结果表/符号表在正文中不存在（只有文字占位）")
+                failures.append(f"{_rel(d)}: 表格实体数为 0 —— 题面要求的结果表/符号表在正文中不存在（只有文字占位）")
             elif n_tables < 2:
-                warnings.append(f"{d.name}: 表格实体仅 {n_tables} 个，核对题面要求的表1/表2/符号说明表是否齐全")
+                warnings.append(f"{_rel(d)}: 表格实体仅 {n_tables} 个，核对题面要求的表1/表2/符号说明表是否齐全")
             if st["drawings"] == 0:
-                warnings.append(f"{d.name}: 全文无图片（计算/几何类题目建议至少 2~4 张图，图为得分载体）")
+                warnings.append(f"{_rel(d)}: 全文无图片（计算/几何类题目建议至少 2~4 张图，图为得分载体）")
             text = "\n".join(st["paragraph_text"])
             for marker in PLACEHOLDER_MARKERS:
                 if marker in text:
-                    warnings.append(f"{d.name}: 发现模板/占位残留「{marker}」——最终稿不得保留")
+                    warnings.append(f"{_rel(d)}: 发现模板/占位残留「{marker}」——最终稿不得保留")
             # 数字一致性线索：提取正文数字
             nums = UNIT_RE.findall(text)
-            info.append(f"{d.name}: 正文共提取 {len(nums)} 个数字")
+            info.append(f"{_rel(d)}: 正文共提取 {len(nums)} 个数字")
+
+        # 子目录 docx（顶层已有主交付物）：仅登记，不参与终检判定
+        if top_docx:
+            for d in deep_docx:
+                st = docx_stats(d)
+                tag = f"{_rel(d)}: 子目录文档（不参与终检判定）"
+                if st["error"]:
+                    info.append(f"{tag} 解析失败 {st['error']}")
+                else:
+                    info.append(f"{tag} 表格实体 {len(st['tables'])} 个 / 图片 {st['drawings']} 张 / 段落 {len(st['paragraph_text'])} 段")
 
     # 2) 结果 xlsx 非空
     if result_xlsx:
@@ -168,9 +196,11 @@ def check_artifacts(paper_dir: Path, require_table: bool = True, require_figures
     if not code_files:
         failures.append("作品目录无任何代码文件（.py/.m/.R 等）——不可复现，附录声称的代码无法核实")
 
-    # 4) 图
+    # 4) 图（P1-7 幽灵链收口配套：require_figures 场景无图 = FAIL 而非 warning——
+    #    论文图是结果证据载体，索引/正文可伪造，磁盘无图实物即不可交付；
+    #    确无图需求时用 --no-require-figures 显式豁免，不做静默降级）
     if require_figures and not fig_files:
-        warnings.append("作品目录无图片文件")
+        failures.append("作品目录无任何图片文件（require_figures 场景）——论文图是结果证据载体，无图实物即幽灵链风险；确无图需求请用 --no-require-figures 显式豁免")
 
     return failures, warnings, info
 

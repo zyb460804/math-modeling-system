@@ -34,6 +34,15 @@ v4.9.1（CR-5 / G-05 / G-07 修复）：
         无离线批量模式，不硬接脚本，在 S4/S6 handoff 与 S8 输出中显式列出
   - 状态文件向后兼容：stage id 只增不改；新增字段（skip_count/skipped_steps）只增
 
+v4.9.3（第三轮审查修复，2026-08-15）：
+  - P0-1 盲评校验与 final_gate_runner 共用同一实现：
+    championship_missing_evidence 改调 blind_panel_schema（同目录小模块）——
+    两链口径永不分裂；weighted_total 校验补强 isfinite + ≥0（NaN/-50 旧版照过）
+  - P2-12 S7 接线：三个脚本补 report 键（真实报告路径，读码确认）；
+    check_paper_format.py 新增为 S7 脚本步骤；_report_status 支持 .md 报告
+    （"- Status: `X`" 行）——format_formal_docx 的 rc 恒 0，DEGRADED 渲染报告
+    从此对 runner 可见（WARN 词表接住显示 ⚠️）
+
 用法：
   python tools/quality_gate/pipeline_runner.py init              # 初始化流水线
   python tools/quality_gate/pipeline_runner.py                   # 自动推进到下一个接力点
@@ -49,6 +58,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -59,6 +69,17 @@ for stream in (sys.stdout, sys.stderr):
         stream.reconfigure(encoding="utf-8", errors="replace")
     except Exception:
         pass
+
+# ── 共用校验模块（第三轮审查 P0-1）──
+# 与 tools/quality_gate/final_gate_runner.check_blind_panel_championship 消费同一实现，
+# 两链对同一份 blind_panel_report.json 的结论永不分裂（同 verify_gate 的
+# missing_verify_for_models 被 final_gate_runner 复用的共用模式）。
+# 脚本方式运行时 sys.path[0] 即本目录；被当作模块 import 时补目录重试。
+try:
+    from blind_panel_schema import blind_panel_report_problems
+except ImportError:  # pragma: no cover - 仅在被作为模块导入且 sys.path 无本目录时触发
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from blind_panel_schema import blind_panel_report_problems
 
 # ── 路径 ──
 WORK_DIR = Path.cwd()
@@ -83,12 +104,12 @@ PASS_STATUSES = {"PASS", "PASSED", "OK", "SUCCESS"}
 # 状态机里"已越过"的状态：approved=真通过；skipped=带 SKIP 推进（≠通过）
 ADVANCED_STATUSES = {"approved", "skipped"}
 
-# blind-panel 聚合报告 verdict 枚举（第二轮审查 HIGH-2）
-# 来源：.claude/skills/blind-panel/SKILL.md 聚合 schema——
-#   "verdict": "refine",      # pass | refine | block
-# 只有 pass 是放行枚举；refine/block 须先按 bottleneck/fix_one_thing 修改后重评
-BLIND_PANEL_VERDICTS = {"pass", "refine", "block"}
-BLIND_PANEL_PASS_VERDICTS = {"pass"}
+# blind-panel verdict 枚举/放行集合已移至同目录 blind_panel_schema.py（第三轮审查 P0-1），
+# 由 final_gate_runner 与本文件共用同一校验函数——两链口径唯一来源，勿在此重复定义。
+
+# md 报告的状态行（P2-12）：与 check_paper_format.check_render_report 同一形态
+# （"- Status: `GENERATED|DEGRADED`"），供 _report_status 解析 format_formal_docx 的 md 报告
+MD_STATUS_RE = re.compile(r"-\s*Status:\s*`?([A-Za-z]+)`?")
 
 
 # ── 阶段定义（对齐 pipeline_manager.py STAGE_ORDER）──
@@ -213,10 +234,23 @@ STAGES += [
         "id": "S7_format_gate",
         "name": "排版格式门",
         "type": "script",
+        # report 键（第三轮审查 P2-12，读各脚本源码确认的真实报告路径）：
+        #   format_formal_docx → paper_output/format_check_report.md（md，"- Status: `GENERATED|DEGRADED`" 行；
+        #     该脚本 rc 恒 0（DEGRADED 只打印），无 report 键则 DEGRADED 对 runner 不可见——
+        #     由 _report_status 的 md 分支解析，WARN_STATUSES 接住显示 ⚠️）
+        #   check_paper_format → paper_output/format_check_report.json（status: PASS|FAIL，
+        #     其 render_check 会把 DEGRADED 渲染报告记为 failure → FAIL）
+        #   consistency/completeness audit → qa/{consistency,completeness}_audit_report.json（PASS|WARN|FAIL）
+        # check_paper_format.py 新增为脚本步骤（未收口清单 #2：格式门禁原本不在任何自动链）
         "scripts": [
-            {"cmd": [PY, str(SKILLS_DIR / "paper-formal-writer" / "scripts" / "format_formal_docx.py")], "label": "Word 排版（OMML 公式 + 图片）"},
-            {"cmd": [PY, str(SKILLS_DIR / "consistency-auditor" / "scripts" / "audit.py")], "label": "一致性审计（三审计层第1层）"},
-            {"cmd": [PY, str(SKILLS_DIR / "completeness-auditor" / "scripts" / "audit.py")], "label": "完整性审计（三审计层第2层）"},
+            {"cmd": [PY, str(SKILLS_DIR / "paper-formal-writer" / "scripts" / "format_formal_docx.py")], "label": "Word 排版（OMML 公式 + 图片）",
+             "report": "format_check_report.md"},
+            {"cmd": [PY, str(SKILLS_DIR / "paper-formal-writer" / "scripts" / "check_paper_format.py")], "label": "格式门禁（字数/三级标题/图表引用/DEGRADED 渲染核验）",
+             "report": "format_check_report.json"},
+            {"cmd": [PY, str(SKILLS_DIR / "consistency-auditor" / "scripts" / "audit.py")], "label": "一致性审计（三审计层第1层）",
+             "report": "qa/consistency_audit_report.json"},
+            {"cmd": [PY, str(SKILLS_DIR / "completeness-auditor" / "scripts" / "audit.py")], "label": "完整性审计（三审计层第2层）",
+             "report": "qa/completeness_audit_report.json"},
         ],
     },
     {
@@ -236,7 +270,8 @@ STAGES += [
         "championship_evidence": [
             {
                 "file": "qa/blind_panel_report.json",
-                "item": "blind-panel 3 座盲评聚合报告（skill 定义产物：seats A/B/C + verdict）",
+                "schema": "blind_panel",  # → blind_panel_schema 共用校验（与 final_gate_runner 同口径）
+                "item": "blind-panel 3 座盲评聚合报告（skill 定义产物：seats A/B/C 各含数值 weighted_total + verdict）",
                 "how": "调 blind-panel skill：3 座并行盲评 → Lead 聚合写 paper_output/qa/blind_panel_report.json（见 .claude/skills/blind-panel/SKILL.md）",
             },
         ],
@@ -330,19 +365,35 @@ def run_one_script(cmd: list[str], label: str) -> tuple[int, str, str]:
 
 
 def _report_status(report_rel: str | None) -> str | None:
-    """读子脚本报告 JSON 的 status 字段（相对 paper_output/）；读不到返回 None。"""
+    """读子脚本报稿的 status（相对 paper_output/）；读不到返回 None。
+
+    P2-12：.md 报告（如 format_formal_docx 的 format_check_report.md）没有 JSON
+    status 字段，但正文有 "- Status: `GENERATED|DEGRADED`" 行——与
+    check_paper_format.check_render_report 用同一正则解析；DEGRADED 由
+    WARN_STATUSES 接住显示 ⚠️（该脚本 rc 恒 0，此前 DEGRADED 对 runner 不可见）。
+    """
     if not report_rel:
         return None
     path = OUTPUT_DIR / report_rel
     if not path.exists():
         return None
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        raw_text = path.read_text(encoding="utf-8", errors="replace")
     except Exception:
         return None
-    if isinstance(data, dict):
-        raw = str(data.get("status", "")).strip()
-        return raw.upper() or None
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            return None
+        if isinstance(data, dict):
+            raw = str(data.get("status", "")).strip()
+            return raw.upper() or None
+        return None
+    if suffix == ".md":
+        m = MD_STATUS_RE.search(raw_text)
+        return m.group(1).upper() if m else None
     return None
 
 
@@ -379,10 +430,21 @@ def classify_script_result(rc: int, stdout: str, script: dict) -> tuple[str, str
 
 # ── championship 证据检查（存在性检查，非脚本强制）──
 def championship_missing_evidence(stage: dict) -> list[tuple[dict, str]]:
-    """检查 championship_evidence 声明的产物文件。返回 [(evidence, 原因)]。"""
+    """检查 championship_evidence 声明的产物文件。返回 [(evidence, 原因)]。
+
+    blind-panel 证据（schema="blind_panel"）改调 blind_panel_schema.blind_panel_report_problems
+    （第三轮审查 P0-1）：与 final_gate_runner.check_blind_panel_championship 共用同一
+    校验函数——verdict 枚举且仅 pass 放行 / 每座 weighted_total 有限数值 ≥0
+    （NaN/-50/空座对象旧版照过，现拒）/ conflicts 非空拒。两链口径唯一来源。
+    其它证据保持通用存在性检查（存在 + ≥10 字节 + JSON 可解析）。
+    """
     missing: list[tuple[dict, str]] = []
     for ev in stage.get("championship_evidence", []):
         path = OUTPUT_DIR / ev["file"]
+        if ev.get("schema") == "blind_panel" or path.name == "blind_panel_report.json":
+            problems, _data = blind_panel_report_problems(path)
+            missing.extend((ev, p) for p in problems)
+            continue
         if not path.exists():
             missing.append((ev, "文件不存在"))
             continue
@@ -392,40 +454,9 @@ def championship_missing_evidence(stage: dict) -> list[tuple[dict, str]]:
             continue
         if path.suffix.lower() == ".json":
             try:
-                data = json.loads(path.read_text(encoding="utf-8"))
+                json.loads(path.read_text(encoding="utf-8"))
             except Exception as exc:
                 missing.append((ev, f"JSON 不可解析：{exc}"))
-                continue
-            if not isinstance(data, dict):
-                missing.append((ev, "JSON 顶层不是对象——不符合 blind-panel 聚合 schema"))
-                continue
-            # verdict 真消费（第二轮审查 HIGH-2）：旧版只查"键存在"，
-            # 12 字节矛盾 JSON（三座互异+verdict=block）照样过；现在必须命中放行枚举
-            verdict = str(data.get("verdict", "")).strip().lower()
-            if verdict not in BLIND_PANEL_VERDICTS:
-                missing.append((ev, f"verdict={data.get('verdict')!r} 不在枚举 pass|refine|block 内"
-                                   f"（见 .claude/skills/blind-panel/SKILL.md 聚合 schema）"))
-            elif verdict not in BLIND_PANEL_PASS_VERDICTS:
-                missing.append((ev, f"盲评 verdict='{verdict}'（≠pass）——按 SKILL.md 须先按 bottleneck/"
-                                   f"fix_one_thing 修改后重评，未解决的 refine/block 不得推进"))
-            # seats：≥3 座且每座必须有数值 weighted_total（scorecard 核心字段）
-            seats = data.get("seats")
-            if not isinstance(seats, dict) or len(seats) < 3:
-                missing.append((ev, "JSON 缺 seats（不足 3 座）——不符合 blind-panel 聚合 schema"))
-            else:
-                bad = [f"{sid}: weighted_total 非数值"
-                       for sid, seat in seats.items()
-                       if not (isinstance(seat, dict)
-                               and isinstance(seat.get("weighted_total"), (int, float))
-                               and not isinstance(seat.get("weighted_total"), bool))]
-                if bad:
-                    missing.append((ev, "座位加权总分校验失败：" + "; ".join(bad)))
-            # 20 分冲突未仲裁 → 不得 clean pass（SKILL.md 聚合规则）
-            agg = data.get("aggregate")
-            conflicts = agg.get("evidence_conflicts") if isinstance(agg, dict) else None
-            if conflicts:
-                missing.append((ev, f"aggregate.evidence_conflicts 非空（{len(conflicts)} 处 >20 分冲突"
-                                   f"未经 lead 仲裁）——未解决的证据冲突不得放行"))
     return missing
 
 

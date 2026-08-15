@@ -15,8 +15,17 @@ from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
+from _project_root import ProjectRootNotFoundError, find_project_root
 
-BASE_DIR = Path.cwd()
+# M-13（未收口 #9）锚定统一：由文件位置上溯定位项目根，替代 Path.cwd()。
+# 仅动锚定/路径解析层，DEGRADED/公式链/表格等其余逻辑不碰。附带收益：
+# resolve_path 的"必须位于 paper_output/ 或项目根内"越界检查自此始终以真实
+# 项目根为界（旧 cwd 锚定下从浅目录运行时该安全边界会被放大到整个盘符）。
+try:
+    BASE_DIR = find_project_root()
+except ProjectRootNotFoundError as exc:
+    print(f"[ANCHOR FAILED] {exc}", file=sys.stderr)
+    raise SystemExit(2)
 OUTPUT_DIR = BASE_DIR / "paper_output"
 SOURCE_FILE = OUTPUT_DIR / "final_paper_source.md"
 FALLBACK_SOURCE_FILE = OUTPUT_DIR / "final_paper.md"
